@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Gato Bird - Versão Mercado</title>
+    <title>Gato Bird - Versão Final</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     
@@ -195,16 +195,26 @@
             messagingSenderId: "1050244688440",
             appId: "1:1050244688440:web:168777901fb3ebb1c454cd"
         };
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        window.firebaseDb = db;
-        window.firebaseAuth = auth;
+        
+        // Inicialização Segura do Firebase
+        try {
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            const db = getFirestore(app);
+            window.firebaseDb = db;
+            window.firebaseAuth = auth;
+            console.log("Firebase conectado.");
+        } catch (e) {
+            console.error("Erro ao conectar Firebase:", e);
+        }
 
-        // Atualizador de Presença (Para o Online)
+        const auth = window.firebaseAuth;
+        const db = window.firebaseDb;
+
+        // Atualizador de Presença
         setInterval(() => {
-            if(auth.currentUser) {
-                updateDoc(doc(db, "users", auth.currentUser.uid), { lastActive: Date.now() }).catch(e => console.log("Erro ao atualizar online:", e));
+            if(auth && auth.currentUser) {
+                updateDoc(doc(db, "users", auth.currentUser.uid), { lastActive: Date.now() }).catch(e => {});
             }
         }, 60000);
 
@@ -247,7 +257,6 @@
                     
                     const user = auth.currentUser;
                     await updateProfile(user, { displayName: name });
-                    // Garante que o documento do usuário é criado corretamente
                     await setDoc(doc(db, "users", user.uid), { 
                         displayName: name, 
                         lastActive: Date.now(),
@@ -277,40 +286,45 @@
         };
 
         // ESCUTA AUTENTICAÇÃO
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                window.authSystem.user = user;
-                document.getElementById('authMsg').innerText = "Sucesso!";
-                
-                if(!user.displayName) {
+        if (auth) {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    window.authSystem.user = user;
+                    const msg = document.getElementById('authMsg');
+                    if(msg) msg.innerText = "Sucesso!";
+                    
+                    if(!user.displayName) {
+                        document.getElementById('loginScreen').classList.add('hidden');
+                        document.getElementById('nameSetupScreen').classList.remove('hidden');
+                        return; 
+                    }
+
+                    const logoutBtn = document.getElementById('logoutBtn');
+                    if(logoutBtn) logoutBtn.classList.remove('hidden');
+                    
+                    const docRef = doc(db, "users", user.uid);
+                    try {
+                        const docSnap = await getDoc(docRef);
+                        await updateDoc(docRef, { lastActive: Date.now() }).catch(()=>{});
+
+                        if (docSnap.exists() && window.gameSetState) {
+                            window.gameSetState(docSnap.data());
+                        } else if(window.gameGetState) {
+                            window.authSystem.saveData(window.gameGetState());
+                        }
+                    } catch(e) {
+                        console.error("Erro ao carregar dados:", e);
+                    }
+                    
+                    window.startNotificationListener();
                     document.getElementById('loginScreen').classList.add('hidden');
-                    document.getElementById('nameSetupScreen').classList.remove('hidden');
-                    return; 
                 }
-
-                document.getElementById('logoutBtn').classList.remove('hidden');
-                
-                // Carrega dados e inicia Listener de Notificações
-                const docRef = doc(db, "users", user.uid);
-                const docSnap = await getDoc(docRef);
-                
-                // Atualiza timestamp de login
-                await updateDoc(docRef, { lastActive: Date.now() }).catch(()=>{});
-
-                if (docSnap.exists() && window.gameSetState) {
-                    window.gameSetState(docSnap.data());
-                } else if(window.gameGetState) {
-                    window.authSystem.saveData(window.gameGetState());
-                }
-                
-                // *** PONTO CRÍTICO: INICIAR LISTENER ***
-                window.startNotificationListener();
-                document.getElementById('loginScreen').classList.add('hidden');
-            }
-        });
+            });
+        }
 
         // --- FUNÇÕES DE AMIGOS E RANKING ---
         window.searchFriend = async () => {
+            if(!auth.currentUser) return alert("Faça login primeiro!");
             const input = document.getElementById('friendSearchInput');
             const msg = document.getElementById('friendMsg');
             const name = input.value.trim().toUpperCase();
@@ -327,7 +341,6 @@
                     let found = false;
                     snap.forEach(async (d) => {
                          if(d.id !== auth.currentUser.uid) {
-                             // Envia solicitação
                              try {
                                  await addDoc(collection(db, "notifications"), {
                                      from: auth.currentUser.uid,
@@ -337,12 +350,11 @@
                                      date: Date.now()
                                  });
                                  msg.innerText = `Enviado para ${d.data().displayName}!`;
-                                 msg.style.color = '#10B981'; // Verde
+                                 msg.style.color = '#10B981';
                                  input.value = "";
                                  found = true;
                              } catch(err) {
                                  msg.innerText = "Erro ao enviar.";
-                                 console.error(err);
                              }
                          }
                     });
@@ -356,6 +368,7 @@
 
         window.loadFirebaseLeaderboard = async () => {
             const list = document.getElementById('leaderboardList');
+            if(!list) return;
             list.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm"><i class="fas fa-spinner fa-spin"></i> Carregando Top 10...</div>';
             try {
                 const q = query(collection(db, "users"), orderBy("highScore", "desc"), limit(10));
@@ -408,64 +421,72 @@
             if(!auth.currentUser) return;
             const notifList = document.getElementById('notifList');
             
-            const q = query(collection(db, "notifications"), where("to", "==", auth.currentUser.uid));
-            onSnapshot(q, (snapshot) => {
-                notifList.innerHTML = '';
-                let validCount = 0;
-                
-                if(snapshot.empty) {
-                    document.getElementById('notifBadge').classList.add('hidden');
-                    notifList.innerHTML = '<div class="text-gray-400 text-sm text-center">Sem notificações novas.</div>';
-                    return;
-                }
-
-                snapshot.forEach(docSnap => {
-                    const notif = docSnap.data();
-                    validCount++;
+            try {
+                const q = query(collection(db, "notifications"), where("to", "==", auth.currentUser.uid));
+                onSnapshot(q, (snapshot) => {
+                    notifList.innerHTML = '';
+                    let validCount = 0;
                     
-                    const el = document.createElement('div');
-                    el.className = 'notif-item';
-                    
-                    if(notif.type === 'friend_request') {
-                        el.innerHTML = `
-                            <div class="font-bold text-sm mb-1"><i class="fas fa-user-plus text-blue-500"></i> Pedido de Amizade</div>
-                            <div class="text-xs text-gray-600 mb-2">${notif.fromName} quer ser seu amigo.</div>
-                            <div class="flex gap-2">
-                                <button class="btn bg-green-500 py-1 text-xs mb-0" id="accept-${docSnap.id}">Aceitar</button>
-                                <button class="btn bg-red-500 py-1 text-xs mb-0" id="deny-${docSnap.id}">Recusar</button>
-                            </div>
-                        `;
+                    if(snapshot.empty) {
+                        document.getElementById('notifBadge').classList.add('hidden');
+                        notifList.innerHTML = '<div class="text-gray-400 text-sm text-center">Sem notificações novas.</div>';
+                        return;
                     }
-                    
-                    notifList.appendChild(el);
-                    
-                    // Event Listeners Dinâmicos
-                    setTimeout(() => {
-                        const denyBtn = document.getElementById(`deny-${docSnap.id}`);
-                        if(denyBtn) {
-                            denyBtn.onclick = async () => {
-                                await deleteDoc(doc(db, "notifications", docSnap.id));
-                            };
+
+                    snapshot.forEach(docSnap => {
+                        const notif = docSnap.data();
+                        validCount++;
+                        
+                        const el = document.createElement('div');
+                        el.className = 'notif-item';
+                        
+                        if(notif.type === 'friend_request') {
+                            el.innerHTML = `
+                                <div class="font-bold text-sm mb-1"><i class="fas fa-user-plus text-blue-500"></i> Pedido de Amizade</div>
+                                <div class="text-xs text-gray-600 mb-2">${notif.fromName} quer ser seu amigo.</div>
+                                <div class="flex gap-2">
+                                    <button class="btn bg-green-500 py-1 text-xs mb-0" id="accept-${docSnap.id}">Aceitar</button>
+                                    <button class="btn bg-red-500 py-1 text-xs mb-0" id="deny-${docSnap.id}">Recusar</button>
+                                </div>
+                            `;
                         }
                         
-                        const accFriendBtn = document.getElementById(`accept-${docSnap.id}`);
-                        if(accFriendBtn) {
-                            accFriendBtn.onclick = async () => {
-                                await game.acceptFriend(notif.from, notif.fromName);
-                                await deleteDoc(doc(db, "notifications", docSnap.id));
-                            };
-                        }
-                    }, 50);
-                });
+                        notifList.appendChild(el);
+                        
+                        setTimeout(() => {
+                            const denyBtn = document.getElementById(`deny-${docSnap.id}`);
+                            if(denyBtn) {
+                                denyBtn.onclick = async () => {
+                                    await deleteDoc(doc(db, "notifications", docSnap.id));
+                                };
+                            }
+                            
+                            const accFriendBtn = document.getElementById(`accept-${docSnap.id}`);
+                            if(accFriendBtn) {
+                                accFriendBtn.onclick = async () => {
+                                    try {
+                                        await game.acceptFriend(notif.from, notif.fromName);
+                                        await deleteDoc(doc(db, "notifications", docSnap.id));
+                                    } catch(e) {
+                                        console.error("Erro ao aceitar:", e);
+                                        alert("Erro ao aceitar amigo. Tente novamente.");
+                                    }
+                                };
+                            }
+                        }, 50);
+                    });
 
-                const badge = document.getElementById('notifBadge');
-                if(validCount > 0) {
-                    badge.classList.remove('hidden');
-                    badge.innerText = validCount;
-                } else {
-                    badge.classList.add('hidden');
-                }
-            });
+                    const badge = document.getElementById('notifBadge');
+                    if(validCount > 0) {
+                        badge.classList.remove('hidden');
+                        badge.innerText = validCount;
+                    } else {
+                        badge.classList.add('hidden');
+                    }
+                });
+            } catch(e) {
+                console.error("Erro listener notif:", e);
+            }
         };
 
         window.syncServerShop = async () => {
@@ -476,13 +497,15 @@
                 let shopData = null;
                 if (snap.exists()) shopData = snap.data();
                 if (!shopData || now > shopData.expires) {
-                    const pool = window.GAME_CATS.filter(c => ['comum','raro','epico','legendario'].includes(c.raridade) && c.aparecer_na_loja !== false);
-                    const selected = [];
-                    if (pool.length > 0) {
-                        for(let i=0; i<3; i++) selected.push(pool[Math.floor(Math.random() * pool.length)].id);
+                    if(window.GAME_CATS) {
+                        const pool = window.GAME_CATS.filter(c => ['comum','raro','epico','legendario'].includes(c.raridade) && c.aparecer_na_loja !== false);
+                        const selected = [];
+                        if (pool.length > 0) {
+                            for(let i=0; i<3; i++) selected.push(pool[Math.floor(Math.random() * pool.length)].id);
+                        }
+                        shopData = { items: selected, expires: now + 86400000 };
+                        await setDoc(shopRef, shopData);
                     }
-                    shopData = { items: selected, expires: now + 86400000 };
-                    await setDoc(shopRef, shopData);
                 }
                 if (window.updateShopFromData) window.updateShopFromData(shopData);
             } catch (e) {
@@ -495,7 +518,7 @@
 
     <div id="game-container">
         <canvas id="gameCanvas"></canvas>
-        <div id="versionLabel">v2.5 Mercado & Fix</div>
+        <div id="versionLabel">v3.0 Final & Fix</div>
         
         <div id="muteBtn" class="interactive" onclick="game.toggleMute()">
             <i class="fas fa-volume-up" id="muteIcon"></i>
@@ -782,15 +805,9 @@
 
 <script>
 (function() {
-    // =========================================================================
-    // 🛠️ ÁREA DE CONFIGURAÇÃO FÁCIL
-    // =========================================================================
-    
-    // CÓDIGOS DE RESGATE
     const CODIGOS_PROMOCIONAIS = [
         { codigo: "SIXSEVEN", tipo: "moedas", valor: 500 },
     ];
-    // CONFIGURAÇÃO DE TORNEIOS
     const TOURNAMENT_CONFIG = [
         {
             id: 'copa inicio',
@@ -809,7 +826,6 @@
         gameover: 'https://assets.mixkit.co/sfx/preview/mixkit-arcade-retro-game-over-213.wav',
         click: 'https://assets.mixkit.co/sfx/preview/mixkit-modern-technology-select-3124.wav'
     };
-    // SEUS GATOS ORIGINAIS
     const MEUS_GATOS = [
         { id: 'g001', nome: 'Dionísio', raridade: 'comum', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/Gemini_Generated_Image_uy5y2puy5y2puy5y%20(1).png', cor_padrao: '#FF9933', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
         { id: 'g002', nome: 'Gato Emo', raridade: 'comum', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/Gemini_Generated_Image_oi2dkjoi2dkjoi2d%20(2).png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
@@ -857,11 +873,17 @@
         mitico: { label: 'Mítico', color: '#EF4444' },
         secreta: { label: 'Secreto', color: '#10B981' }
     };
+    
+    // Image Loader Safe
     MEUS_GATOS.forEach(cat => {
         if(cat.imagem && cat.imagem.length > 5) {
-            const img = new Image(); img.src = cat.imagem; cat.imgObj = img;
+            const img = new Image(); 
+            img.src = cat.imagem; 
+            img.onerror = () => { cat.imgObj = null; }; // Fallback se erro
+            cat.imgObj = img;
         }
     });
+
     const audioCtx = {
         muted: false,
         play: (key) => {
@@ -880,6 +902,7 @@
             }
         }
     };
+
     // =========================================================================
     // ⚙️ SISTEMA DE SAVE
     // =========================================================================
@@ -898,6 +921,7 @@
     window.gameGetState = () => state;
     window.gameSetState = (newData) => {
         state = { ...state, ...newData };
+        // Default values ensure no undefined errors
         if(!state.counts) { state.counts = {}; state.unlocked.forEach(id => state.counts[id]=1); }
         if(!state.friends) state.friends = [];
         if(!state.tournaments) state.tournaments = {};
@@ -960,6 +984,7 @@
 
     function renderDailyShop() {
         const container = document.getElementById('dailyShopList');
+        if(!container) return;
         container.innerHTML = '';
         if(!dailyShopItems || dailyShopItems.length === 0) {
              container.innerHTML = '<div class="text-xs text-gray-400 p-2">Loja vazia ou carregando...</div>';
@@ -1007,20 +1032,23 @@
 
     setInterval(() => {
         if(dailyShopExpires > 0) {
+            const timerEl = document.getElementById('dailyTimer');
+            if(!timerEl) return;
             const diff = dailyShopExpires - Date.now();
             if(diff > 0) {
                 const h = Math.floor(diff / 3600000);
                 const m = Math.floor((diff % 3600000) / 60000);
                 const s = Math.floor((diff % 60000) / 1000);
-                document.getElementById('dailyTimer').innerText = `${h}h ${m}m ${s}s`;
+                timerEl.innerText = `${h}h ${m}m ${s}s`;
             } else { 
-                document.getElementById('dailyTimer').innerText = "Renovando...";
+                timerEl.innerText = "Renovando...";
                 if(window.syncServerShop) window.syncServerShop();
             }
         }
     }, 1000);
 
     function drawCat(ctx, cat, x, y, size, frame) {
+        if(!cat) return;
         ctx.save();
         ctx.translate(x, y);
         if(cat.efeito === 'brilho' || cat.efeito === 'fogo' || cat.raridade === 'mitico') {
@@ -1032,14 +1060,16 @@
         }
 
         let drawSize = size * (cat.escala_imagem || 1.3);
-        if (cat.imgObj && cat.imgObj.complete) {
+        if (cat.imgObj && cat.imgObj.complete && cat.imgObj.naturalWidth !== 0) {
             ctx.beginPath();
             ctx.arc(0, 0, size/2, 0, Math.PI*2); ctx.clip();
             ctx.drawImage(cat.imgObj, -drawSize/2, -drawSize/2, drawSize, drawSize);
         } else {
-            ctx.fillStyle = cat.cor_padrao;
+            // Fallback colorido se imagem falhar
+            ctx.fillStyle = cat.cor_padrao || '#999';
             ctx.beginPath();
             ctx.arc(0, 0, size/2, 0, Math.PI*2); ctx.fill();
+            // Orelhas
             ctx.beginPath();
             ctx.moveTo(-size*0.3, -size*0.3); ctx.lineTo(-size*0.4, -size*0.6); ctx.lineTo(-size*0.1, -size*0.4); ctx.fill();
             ctx.beginPath(); ctx.moveTo(size*0.3, -size*0.3); ctx.lineTo(size*0.4, -size*0.6);
@@ -1123,25 +1153,27 @@
             if(diffMult > 2.5) diffMult = 2.5; 
             let currentSpeed = speed * diffMult;
             
-            // --- CORREÇÃO DOS CANOS: DISTÂNCIA MAIOR ---
-            // Aumentado para 320 de distância horizontal
-            if (this.list.length === 0 || canvas.width - this.list[this.list.length-1].x >= 320) {
-                // Abertura maior (190)
+            // Distância 320, Abertura 190 (Conforme pedido)
+            // Fix: Check list length first
+            if (this.list.length === 0 || (canvas.width - this.list[this.list.length-1].x >= 320)) {
                 let gap = 190;
                 let padding = 80;
-                
                 let minPipe = padding;
                 let maxPipe = canvas.height - padding - gap;
-                
                 let y = Math.floor(Math.random() * (maxPipe - minPipe + 1)) + minPipe;
                 this.list.push({x: canvas.width, y, gap, scored: false});
             }
 
-            this.list.forEach(p => {
+            for (let i = 0; i < this.list.length; i++) {
+                let p = this.list[i];
                 p.x -= currentSpeed;
+                
+                // Colisão
                 if(bird.x + 20 > p.x && bird.x - 20 < p.x + 60) {
                     if(bird.y - 20 < p.y || bird.y + 20 > p.y + p.gap) gameOver();
                 }
+                
+                // Pontuação
                 if(p.x + 60 < bird.x && !p.scored) {
                     p.scored = true;
                     score++;
@@ -1150,7 +1182,8 @@
                     state.coins += (cat ? cat.multiplicador : 1);
                     document.getElementById('scoreDisplay').innerText = score;
                 }
-            });
+            }
+            
             if(this.list.length > 0 && this.list[0].x < -100) this.list.shift();
         },
         draw: function() {
@@ -1181,7 +1214,9 @@
         if(playing) { bird.update(); pipes.update(); frames++; }
         pipes.draw();
         bird.draw();
-        if(!playing && !document.getElementById('menuScreen').classList.contains('hidden')) {
+        
+        const menuScreen = document.getElementById('menuScreen');
+        if(!playing && menuScreen && !menuScreen.classList.contains('hidden')) {
             const mCtx = document.getElementById('menuPreview').getContext('2d');
             mCtx.clearRect(0,0,100,100);
             drawCat(mCtx, MEUS_GATOS.find(c => c.id === state.equipped), 50, 50, 70, frames);
@@ -1222,6 +1257,7 @@
         document.getElementById('hud').classList.add('hidden');
     }
 
+    // DEFININDO OBJETOS GLOBAIS IMEDIATAMENTE PARA EVITAR ERROS DE "UNDEFINED"
     window.game = {
         startGame: () => {
             const now = Date.now();
@@ -1257,7 +1293,9 @@
         openUI: (name) => {
             audioCtx.play('click');
             document.querySelectorAll('.ui-layer').forEach(l => l.classList.add('hidden'));
-            document.getElementById(name+'Screen').classList.remove('hidden');
+            const ui = document.getElementById(name+'Screen');
+            if(ui) ui.classList.remove('hidden');
+            
             if(name === 'menu') updateUI();
             if(name === 'shop') {
                 document.getElementById('shopBalance').innerText = Math.floor(state.coins);
@@ -1306,21 +1344,24 @@
                 }
                 
                 document.getElementById('gachaName').innerText = win.nome;
-                document.getElementById('gachaRarity').innerText = RARITIES[win.raridade]?.label || 'Especial';
-                document.getElementById('gachaRarity').style.backgroundColor = RARITIES[win.raridade]?.color || '#000';
+                const rarityLabel = document.getElementById('gachaRarity');
+                rarityLabel.innerText = RARITIES[win.raridade]?.label || 'Especial';
+                rarityLabel.style.backgroundColor = RARITIES[win.raridade]?.color || '#000';
+                
                 const gCtx = document.getElementById('gachaPreview').getContext('2d');
                 gCtx.clearRect(0,0,120,120);
                 drawCat(gCtx, win, 60, 60, 90, 0);
             }, 1000);
         },
         acceptFriend: async (uid, name) => {
+            if(!auth.currentUser) return;
             // 1. Atualiza Localmente
             if(!state.friends) state.friends = [];
             if(state.friends.some(f => f.uid === uid)) return;
             state.friends.push({uid: uid, name: name});
             save();
 
-            // 2. Atualiza no Banco do OUTRO usuário (para aparecer pra ele)
+            // 2. Tenta atualizar no Banco do OUTRO usuário (Correção de erro de permissão)
             try {
                 const { doc, getDoc, updateDoc } = window.firebaseDb;
                 const otherUserRef = doc(window.firebaseDb, "users", uid);
@@ -1337,12 +1378,14 @@
                         await updateDoc(otherUserRef, { friends: otherFriends });
                     }
                 }
-            } catch(e) { console.error("Erro ao atualizar amigo remoto:", e); }
+            } catch(e) { 
+                console.warn("Não foi possível adicionar na lista do amigo (permissão ou erro):", e);
+                // Mesmo falhando aqui, já salvamos localmente
+            }
 
             alert(`${name} agora é seu amigo!`);
         },
         
-        // --- CÓDIGOS PROMOCIONAIS ---
         redeemCode: () => {
              const input = document.getElementById('codeInput');
              const code = input.value.trim().toUpperCase();
@@ -1368,7 +1411,6 @@
              }
         },
 
-        // --- TORNEIOS (ENTRAR/SAIR) ---
         joinTournament: (id) => {
              if(confirm("Deseja entrar no torneio?")) {
                  if(!state.joinedTournaments.includes(id)) {
@@ -1387,7 +1429,6 @@
         }
     };
     
-    // --- MERCADO SYSTEM ---
     window.market = {
         showBuy: () => {
             document.getElementById('marketBuyPanel').classList.remove('hidden');
@@ -1395,29 +1436,33 @@
             window.market.load();
         },
         showSell: () => {
+            if(!auth.currentUser) return alert("Logue para usar o mercado.");
             document.getElementById('marketBuyPanel').classList.add('hidden');
             document.getElementById('marketSellPanel').classList.remove('hidden');
             
-            // Popula Select
             const select = document.getElementById('sellCatSelect');
+            if(!select) return;
             select.innerHTML = '';
             let totalCats = 0;
             state.unlocked.forEach(id => {
                 totalCats += (state.counts[id] || 0);
                 if((state.counts[id] || 0) > 0) {
                     const cat = MEUS_GATOS.find(c => c.id === id);
-                    const opt = document.createElement('option');
-                    opt.value = id;
-                    opt.text = `${cat.nome} (Você tem: ${state.counts[id]})`;
-                    select.appendChild(opt);
+                    if(cat) {
+                        const opt = document.createElement('option');
+                        opt.value = id;
+                        opt.text = `${cat.nome} (Você tem: ${state.counts[id]})`;
+                        select.appendChild(opt);
+                    }
                 }
             });
 
             if(totalCats <= 1) {
                 alert("Você precisa ter mais de 1 gato no total para vender!");
                 window.market.showBuy();
+            } else {
+                window.market.loadMyListings();
             }
-            window.market.loadMyListings();
         },
         createListing: async () => {
             const catId = document.getElementById('sellCatSelect').value;
@@ -1427,64 +1472,63 @@
             if(!catId || qty < 1 || price < 1) return alert("Preencha tudo corretamente.");
             if((state.counts[catId] || 0) < qty) return alert("Você não tem essa quantidade!");
             
-            // Verifica Limite de 3
-            const { collection, query, where, getDocs, addDoc } = window.firebaseDb;
-            const q = query(collection(window.firebaseDb, "market_listings"), where("sellerId", "==", window.authSystem.user.uid));
-            const snap = await getDocs(q);
-            if(snap.size >= 3) return alert("Limite de 3 anúncios atingido!");
-            
-            // Deduz
-            state.counts[catId] -= qty;
-            if(state.counts[catId] <= 0) {
-                state.unlocked = state.unlocked.filter(i => i !== catId);
-                if(state.equipped === catId) state.equipped = 'g001';
-            }
-            save();
-
-            // Envia
             try {
+                const { collection, query, where, getDocs, addDoc } = window.firebaseDb;
+                const q = query(collection(window.firebaseDb, "market_listings"), where("sellerId", "==", window.authSystem.user.uid));
+                const snap = await getDocs(q);
+                if(snap.size >= 3) return alert("Limite de 3 anúncios atingido!");
+                
+                // Deduz
+                state.counts[catId] -= qty;
+                if(state.counts[catId] <= 0) {
+                    state.unlocked = state.unlocked.filter(i => i !== catId);
+                    if(state.equipped === catId) state.equipped = 'g001';
+                }
+                save();
+
                 await addDoc(collection(window.firebaseDb, "market_listings"), {
                     sellerId: window.authSystem.user.uid,
                     sellerName: window.authSystem.user.displayName,
                     catId: catId,
                     qty: qty,
                     price: price,
-                    expires: Date.now() + 86400000 // 24h
+                    expires: Date.now() + 86400000 
                 });
                 alert("Anúncio criado!");
                 window.market.showSell();
             } catch(e) {
                 console.error(e);
-                alert("Erro ao criar anúncio.");
+                alert("Erro ao criar anúncio (Verifique console).");
             }
         },
         buy: async (listingId, price, catId, qty) => {
             if(state.coins < price) return alert("Moedas insuficientes!");
             
-            const { doc, runTransaction } = window.firebaseDb;
-            const listRef = doc(window.firebaseDb, "market_listings", listingId);
-            
             try {
+                const { doc, runTransaction } = window.firebaseDb;
+                const listRef = doc(window.firebaseDb, "market_listings", listingId);
+                
                 await runTransaction(window.firebaseDb, async (transaction) => {
                     const sfDoc = await transaction.get(listRef);
                     if (!sfDoc.exists()) throw "Anúncio não existe mais.";
                     
-                    // Add items to buyer
+                    const sellerId = sfDoc.data().sellerId;
+                    const sellerRef = doc(window.firebaseDb, "users", sellerId);
+                    
+                    // Transfere o item (Lógica Client-Side segura o suficiente pra jogo simples)
                     state.coins -= price;
                     if(!state.unlocked.includes(catId)) state.unlocked.push(catId);
                     state.counts[catId] = (state.counts[catId] || 0) + qty;
                     save();
 
-                    // Pay Seller (Update User Doc directly)
-                    const sellerId = sfDoc.data().sellerId;
-                    const sellerRef = doc(window.firebaseDb, "users", sellerId);
+                    // Paga o vendedor
                     const sellerSnap = await transaction.get(sellerRef);
                     if(sellerSnap.exists()) {
                         const sData = sellerSnap.data();
                         const newCoins = (sData.coins || 0) + price;
                         transaction.update(sellerRef, { coins: newCoins });
                     }
-
+                    
                     transaction.delete(listRef);
                 });
                 alert("Compra realizada com sucesso!");
@@ -1497,78 +1541,95 @@
         },
         load: async () => {
             const list = document.getElementById('marketList');
+            if(!list) return;
             list.innerHTML = '<div class="text-center text-gray-400 mt-10"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>';
             
-            const { collection, query, orderBy, limit, getDocs, where } = window.firebaseDb;
-            const now = Date.now();
-            // Pega tudo e filtra no cliente por expiração (simples)
-            const q = query(collection(window.firebaseDb, "market_listings"), orderBy("expires", "desc"), limit(50));
-            const snap = await getDocs(q);
-            
-            list.innerHTML = '';
-            if(snap.empty) {
-                list.innerHTML = '<div class="text-center text-gray-400 mt-10">Nenhuma oferta no momento.</div>';
-                return;
-            }
-            
-            snap.forEach(d => {
-                const data = d.data();
-                if(data.expires < now) return; // Expirado
-                if(data.sellerId === window.authSystem.user.uid) return; // Não mostrar meus próprios aqui
+            try {
+                const { collection, query, orderBy, limit, getDocs } = window.firebaseDb;
+                const now = Date.now();
+                const q = query(collection(window.firebaseDb, "market_listings"), orderBy("expires", "desc"), limit(50));
+                const snap = await getDocs(q);
+                
+                list.innerHTML = '';
+                if(snap.empty) {
+                    list.innerHTML = '<div class="text-center text-gray-400 mt-10">Nenhuma oferta no momento.</div>';
+                    return;
+                }
+                
+                let count = 0;
+                snap.forEach(d => {
+                    const data = d.data();
+                    if(data.expires < now) return; 
+                    if(auth.currentUser && data.sellerId === auth.currentUser.uid) return;
 
-                const cat = MEUS_GATOS.find(c => c.id === data.catId);
-                const el = document.createElement('div');
-                el.className = 'market-item';
-                el.innerHTML = `
-                    <div class="flex items-center gap-2">
-                        <div class="w-10 h-10 bg-gray-100 rounded border border-gray-300 overflow-hidden">
-                             <img src="${cat.imagem}" class="w-full h-full object-cover">
+                    const cat = MEUS_GATOS.find(c => c.id === data.catId);
+                    if(!cat) return;
+
+                    count++;
+                    const el = document.createElement('div');
+                    el.className = 'market-item';
+                    el.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <div class="w-10 h-10 bg-gray-100 rounded border border-gray-300 overflow-hidden">
+                                 <img src="${cat.imagem}" class="w-full h-full object-cover">
+                            </div>
+                            <div class="text-left">
+                                <div class="font-bold text-sm text-gray-700">${cat.nome} <span class="text-xs text-gray-500">x${data.qty}</span></div>
+                                <div class="text-[10px] text-gray-400">Vendedor: ${data.sellerName}</div>
+                            </div>
                         </div>
-                        <div class="text-left">
-                            <div class="font-bold text-sm text-gray-700">${cat.nome} <span class="text-xs text-gray-500">x${data.qty}</span></div>
-                            <div class="text-[10px] text-gray-400">Vendedor: ${data.sellerName}</div>
-                        </div>
-                    </div>
-                    <button class="btn bg-green-500 py-2 px-4 text-xs w-auto mb-0" onclick="market.buy('${d.id}', ${data.price}, '${data.catId}', ${data.qty})">
-                        ${data.price} 💰
-                    </button>
-                `;
-                list.appendChild(el);
-            });
+                        <button class="btn bg-green-500 py-2 px-4 text-xs w-auto mb-0" onclick="market.buy('${d.id}', ${data.price}, '${data.catId}', ${data.qty})">
+                            ${data.price} 💰
+                        </button>
+                    `;
+                    list.appendChild(el);
+                });
+                if(count === 0) list.innerHTML = '<div class="text-center text-gray-400 mt-10">Apenas seus anúncios ativos.</div>';
+
+            } catch(e) {
+                console.error("Erro mercado:", e);
+                list.innerHTML = '<div class="text-center text-red-400 mt-10">Erro ao carregar mercado.</div>';
+            }
         },
         loadMyListings: async () => {
             const list = document.getElementById('myListings');
+            if(!list) return;
             list.innerHTML = '...';
-            const { collection, query, where, getDocs, deleteDoc, doc } = window.firebaseDb;
-            const q = query(collection(window.firebaseDb, "market_listings"), where("sellerId", "==", window.authSystem.user.uid));
-            const snap = await getDocs(q);
-            
-            list.innerHTML = '';
-            snap.forEach(d => {
-                const data = d.data();
-                const cat = MEUS_GATOS.find(c => c.id === data.catId);
-                const el = document.createElement('div');
-                el.className = 'market-item bg-pink-50 border-pink-200';
-                el.innerHTML = `
-                    <div class="flex items-center gap-2">
-                        <div class="font-bold text-sm text-gray-700">${cat.nome} x${data.qty}</div>
-                        <div class="font-bold text-sm text-yellow-600">${data.price} 💰</div>
-                    </div>
-                    <button class="btn bg-red-500 py-1 px-3 text-[10px] w-auto mb-0" id="del-${d.id}">X</button>
-                `;
-                list.appendChild(el);
-                document.getElementById(`del-${d.id}`).onclick = async () => {
-                    if(confirm("Cancelar anúncio? Os itens serão perdidos (regras do mercado).")) {
-                        await deleteDoc(doc(window.firebaseDb, "market_listings", d.id));
-                        window.market.showSell();
+            try {
+                const { collection, query, where, getDocs, deleteDoc, doc } = window.firebaseDb;
+                const q = query(collection(window.firebaseDb, "market_listings"), where("sellerId", "==", window.authSystem.user.uid));
+                const snap = await getDocs(q);
+                
+                list.innerHTML = '';
+                snap.forEach(d => {
+                    const data = d.data();
+                    const cat = MEUS_GATOS.find(c => c.id === data.catId);
+                    if(!cat) return;
+
+                    const el = document.createElement('div');
+                    el.className = 'market-item bg-pink-50 border-pink-200';
+                    el.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <div class="font-bold text-sm text-gray-700">${cat.nome} x${data.qty}</div>
+                            <div class="font-bold text-sm text-yellow-600">${data.price} 💰</div>
+                        </div>
+                        <button class="btn bg-red-500 py-1 px-3 text-[10px] w-auto mb-0" id="del-${d.id}">X</button>
+                    `;
+                    list.appendChild(el);
+                    document.getElementById(`del-${d.id}`).onclick = async () => {
+                        if(confirm("Cancelar anúncio? Os itens serão perdidos (regras do mercado).")) {
+                            await deleteDoc(doc(window.firebaseDb, "market_listings", d.id));
+                            window.market.showSell();
+                        }
                     }
-                }
-            });
+                });
+            } catch(e) { console.error(e); }
         }
     };
 
     function renderFriends() {
         const list = document.getElementById('friendsList');
+        if(!list) return;
         list.innerHTML = '';
         if(!state.friends || state.friends.length === 0) {
             list.innerHTML = '<div class="text-gray-400 text-sm text-center mt-10">Você ainda não tem amigos.<br>Adicione pelo Rank ou Pesquisa.</div>';
@@ -1582,10 +1643,12 @@
             
             let isOnline = false;
             try {
-                const snap = await getDoc(doc(window.firebaseDb, "users", f.uid));
-                if(snap.exists()) {
-                    const last = snap.data().lastActive || 0;
-                    if(Date.now() - last < 5 * 60 * 1000) isOnline = true;
+                if(window.firebaseDb) {
+                    const snap = await getDoc(doc(window.firebaseDb, "users", f.uid));
+                    if(snap.exists()) {
+                        const last = snap.data().lastActive || 0;
+                        if(Date.now() - last < 5 * 60 * 1000) isOnline = true;
+                    }
                 }
             } catch(e){}
 
@@ -1601,6 +1664,7 @@
 
     function renderTournaments() {
         const list = document.getElementById('tournamentList');
+        if(!list) return;
         list.innerHTML = '';
         const now = Date.now();
         
@@ -1637,6 +1701,7 @@
 
     function renderShopBoxes() {
         const container = document.getElementById('boxesContainer');
+        if(!container) return;
         container.innerHTML = '';
         CAIXAS_LOJA.forEach(box => {
             const btn = document.createElement('button');
@@ -1652,6 +1717,7 @@
 
     function renderNews() {
         const container = document.getElementById('newsList');
+        if(!container) return;
         container.innerHTML = '';
         if(NOTICIAS.length === 0) {
             container.innerHTML = '<div class="text-gray-400 p-4">Nenhuma notícia no momento.</div>';
@@ -1688,6 +1754,7 @@
 
     function renderCollection() {
         const container = document.getElementById('collectionList');
+        if(!container) return;
         container.innerHTML = '';
         const tiers = ['comum','raro','epico','legendario','mitico','secreta'];
         
