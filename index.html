@@ -554,6 +554,138 @@
             escala_imagem: 1.3,
             aparecer_na_loja: true
         },
+	{
+            id: 'g004',
+            nome: 'Persa',
+            raridade: 'comum',
+            imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163730730.png', 
+            cor_padrao: '#FF9923',
+            multiplicador: 1,
+            efeito: 'nenhum',
+            escala_imagem: 1.3,
+            aparecer_na_loja: true
+        },
+	{
+            id: 'g005',
+            nome: 'Siamês',
+            raridade: 'comum',
+            imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163712740.png', 
+            cor_padrao: '#FF9923',
+            multiplicador: 1,
+            efeito: 'nenhum',
+            escala_imagem: 1.3,
+            aparecer_na_loja: true
+        },
+	{
+            id: 'g006',
+            nome: 'Sphynx',
+            raridade: 'comum',
+            imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163653076.png', 
+            cor_padrao: '#FF9923',
+            multiplicador: 1,
+            efeito: 'nenhum',
+            escala_imagem: 1.3,
+            aparecer_na_loja: true
+        },
+	{
+            id: 'g007',
+            nome: 'Gato Laranjinha',
+            raridade: 'comum',
+            imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/gato-laranja-filhote.webp', 
+            cor_padrao: '#FF9923',
+            multiplicador: 1,
+            efeito: 'nenhum',
+            escala_imagem: 1.3,
+            aparecer_na_loja: true
+        },
+	{
+            id: 'g008',
+            nome: 'Chocolate',
+            raridade: 'comum',
+            imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/37lea95r4h161%20(1).webp', 
+            cor_padrao: '#FF9923',
+            multiplicador: 1,
+            efeito: 'nenhum',
+            escala_imagem: 1.3,
+            aparecer_na_loja: true
+        },
+	{
+            id: 'g009',
+            nome: 'Stray',
+            raridade: 'raro',
+            imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/stray-review_7wxr.jpg', 
+            cor_padrao: '#FF9923',
+            multiplicador: 1,
+            efeito: 'nenhum',
+            escala_imagem: 1.3,
+            aparecer_na_loja: true
+        },
+	{
+            id: 'g010',
+            nome: 'Gato de Botas',
+            raridade: 'epico',
+            imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/AAT001-P001-89335-1-m-Divulgacao_1.jpg', 
+            cor_padrao: '#FF9923',
+            multiplicador: 1,
+            efeito: 'nenhum',
+            escala_imagem: 1.3,
+            aparecer_na_loja: true
+        },
+	{
+            id: 'g011',
+            nome: 'Tom',
+            raridade: 'epico',
+            imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163603209.png', 
+            cor_padrao: '#FF9923',
+            multiplicador: 1,
+            efeito: 'nenhum',
+            escala_imagem: 1.3,
+            aparecer_na_loja: true
+        },
+	{
+            id: 'g012',
+            nome: 'Garfield',
+            raridade: 'raro',
+            imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/images.png', 
+            cor_padrao: '#FF9923',
+            multiplicador: 1,
+            efeito: 'nenhum',
+            escala_imagem: 1.3,
+            aparecer_na_loja: true
+        },
+	{
+            id: 'g013',
+            nome: 'Gato Makonha',
+            raridade: 'mitico',
+            imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163513345.png', 
+            cor_padrao: '#FF9923',
+            multiplicador: 1,
+            efeito: 'nenhum',
+            escala_imagem: 1.3,
+            aparecer_na_loja: false
+        },
+	{
+            id: 'g014',
+            nome: 'Gato Confuso',
+            raridade: 'legendario',
+            imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163836118.png', 
+            cor_padrao: '#FF9923',
+            multiplicador: 1,
+            efeito: 'nenhum',
+            escala_imagem: 1.3,
+            aparecer_na_loja: false
+        },
+	{
+            id: 'g015',
+            nome: 'Skinwalker',
+            raridade: 'secreto',
+            imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163924483.png', 
+            cor_padrao: '#FF9923',
+            multiplicador: 1,
+            efeito: 'nenhum',
+            escala_imagem: 1.3,
+            aparecer_na_loja: false
+        },
     ];
     // Expondo gatos para a função global de servidor
     window.GAME_CATS = MEUS_GATOS;
@@ -561,8 +693,8 @@
     const NOTICIAS = [
         {
             data: "03/01/2026",
-            titulo: "RANKING E LOJA ONLINE",
-            texto: "Agora o ranking busca os dados do servidor e a loja é sincronizada globalmente!"
+            titulo: "NOVOS GATOS",
+            texto: ""
         },
         {
             data: "03/01/2026",
@@ -572,8 +704,12 @@
     ];
 
     const CAIXAS_LOJA = [
-        { nome: "CAIXA COMUM", raridade: "comum", preco: 10, cor_btn: "bg-gray-400", icone: "📦" },
-        { nome: "CAIXA MÍTICA", raridade: "mitico", preco: 250, cor_btn: "bg-red-500", icone: "🔮" },
+        { nome: "CAIXA COMUM", raridade: "comum", preco: 25, cor_btn: "bg-gray-400", icone: "📦" },
+	{ nome: "CAIXA RARA", raridade: "raro", preco: 100, cor_btn: "bg-blue-500", icone: "📫" },
+	{ nome: "CAIXA ÉPICA", raridade: "epico", preco: 250, cor_btn: "bg-purple-600", icone: "🎁" },
+	{ nome: "CAIXA LENDÁRIA", raridade: "legendario", preco: 500, cor_btn: "bg-yellow-500", icone: "👑" },
+        { nome: "CAIXA MÍTICA", raridade: "mitico", preco: 1500, cor_btn: "bg-red-500", icone: "🔮" },
+	{ nome: "CAIXA SECRETA", raridade: "secreta", preco: 9999, cor_btn: "bg-gray-900 border-green-500 border", icone: "🌈" }
     ];
 
     const RARITIES = {
@@ -1107,3 +1243,4 @@
 </script>
 </body>
 </html>
+
