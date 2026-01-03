@@ -94,7 +94,8 @@
         .skin-item:active { transform: scale(0.9); }
         .skin-item.selected { border-color: #F59E0B; box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.3); z-index: 10; transform: scale(1.05); }
         #dropNotif {
-            position: absolute; top: 15%;
+            position: absolute;
+            top: 15%;
             background: linear-gradient(45deg, #F59E0B, #ff7e5f);
             color: white;
             padding: 12px 30px;
@@ -110,16 +111,18 @@
         /* Utilitários Extras */
         .daily-timer { font-size: 0.7rem; background: #000; color: #10B981; padding: 2px 6px; border-radius: 4px; margin-left: 5px; }
         .leaderboard-row { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #eee; font-size: 0.9rem; font-weight: bold; }
-        .leaderboard-row:nth-child(1) { color: #EAB308; }
-        .leaderboard-row:nth-child(2) { color: #9CA3AF; }
-        .leaderboard-row:nth-child(3) { color: #B45309; }
+        
+        /* Estilo Notícias */
+        .news-item { text-align: left; background: #f3f4f6; padding: 10px; border-radius: 12px; margin-bottom: 8px; border-left: 4px solid #F59E0B; }
+        .news-date { font-size: 0.7rem; color: #9ca3af; font-weight: bold; }
+        .news-title { font-weight: 800; color: #374151; font-size: 1rem; }
+        .news-body { font-size: 0.85rem; color: #4b5563; margin-top: 4px; line-height: 1.2; }
     </style>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-
         // =========================================================================
         // ⚠️ SUBSTITUA AQUI PELAS SUAS CHAVES DO FIREBASE
         // =========================================================================
@@ -173,7 +176,6 @@
                 catch(e) { console.error("Erro nuvem:", e); }
             }
         };
-
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 window.authSystem.user = user;
@@ -246,7 +248,10 @@
                         <button class="btn bg-blue-500" onclick="game.openUI('shop')"><i class="fas fa-store mr-1"></i> LOJA</button>
                         <button class="btn bg-purple-500" onclick="game.openUI('collection')"><i class="fas fa-paw mr-1"></i> GATIL</button>
                     </div>
-                    <button class="btn bg-yellow-500" onclick="game.openUI('leaderboard')"><i class="fas fa-trophy mr-1"></i> RANKING</button>
+                    <div class="grid grid-cols-2 gap-2">
+                         <button class="btn bg-yellow-500" onclick="game.openUI('leaderboard')"><i class="fas fa-trophy mr-1"></i> RANK</button>
+                         <button class="btn bg-teal-500" onclick="game.openUI('news')"><i class="fas fa-newspaper mr-1"></i> NEWS</button>
+                    </div>
                 </div>
                 <button id="logoutBtn" class="hidden text-[10px] bg-red-100 text-red-500 px-3 py-1 rounded-full font-bold mt-2" onclick="authSystem.logout()">SAIR DA CONTA</button>
             </div>
@@ -274,26 +279,19 @@
                 </div>
 
                 <h3 class="font-black text-gray-400 text-xs text-left mb-1 ml-1 uppercase">Caixas Misteriosas</h3>
-                <div class="flex flex-col gap-2 overflow-y-auto pr-1 flex-1 h-[200px]">
-                    <button class="btn bg-gray-400 flex justify-between items-center p-2" onclick="game.buyBox('comum', 10)">
-                        <div class="flex items-center gap-2"><span class="text-xl">📦</span> <span class="text-sm">COMUM</span></div> <span>10 💰</span>
-                    </button>
-                    <button class="btn bg-blue-500 flex justify-between items-center p-2" onclick="game.buyBox('raro', 25)">
-                        <div class="flex items-center gap-2"><span class="text-xl">📫</span> <span class="text-sm">RARA</span></div> <span>25 💰</span>
-                    </button>
-                    <button class="btn bg-purple-600 flex justify-between items-center p-2" onclick="game.buyBox('epico', 50)">
-                        <div class="flex items-center gap-2"><span class="text-xl">🎁</span> <span class="text-sm">ÉPICA</span></div> <span>50 💰</span>
-                    </button>
-                    <button class="btn bg-yellow-500 flex justify-between items-center p-2" onclick="game.buyBox('legendario', 100)">
-                        <div class="flex items-center gap-2"><span class="text-xl">👑</span> <span class="text-sm">LENDÁRIA</span></div> <span>100 💰</span>
-                    </button>
-                    <button class="btn bg-red-500 flex justify-between items-center p-2" onclick="game.buyBox('mitico', 250)">
-                        <div class="flex items-center gap-2"><span class="text-xl">🔮</span> <span class="text-sm">MÍTICA</span></div> <span>250 💰</span>
-                    </button>
-                    <button class="btn bg-gray-900 text-green-400 border-green-500 flex justify-between items-center p-2" onclick="game.buyBox('secreta', 500)">
-                        <div class="flex items-center gap-2"><span class="text-xl">🌈</span> <span class="text-sm">SECRETA</span></div> <span>500 💰</span>
-                    </button>
+                <div id="boxesContainer" class="flex flex-col gap-2 overflow-y-auto pr-1 flex-1 h-[200px]">
+                    </div>
+            </div>
+        </div>
+
+        <div id="newsScreen" class="ui-layer interactive hidden">
+            <div class="card h-[80vh]">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-black text-teal-600"><i class="fas fa-newspaper"></i> NOTÍCIAS</h2>
+                    <button onclick="game.openUI('menu')" class="w-8 h-8 bg-gray-100 rounded-full font-bold">X</button>
                 </div>
+                <div id="newsList" class="overflow-y-auto flex-1 text-left pr-2 custom-scrollbar">
+                    </div>
             </div>
         </div>
 
@@ -318,9 +316,9 @@
                     <div class="bg-gray-100 p-2 text-xs font-bold text-gray-500 flex justify-between">
                         <span>JOGADOR</span> <span>RECORD</span>
                     </div>
-                    <div class="leaderboard-row"><span>1. 👑 MestreGato</span> <span>999</span></div>
-                    <div class="leaderboard-row"><span>2. 🥈 NyanLover</span> <span>850</span></div>
-                    <div class="leaderboard-row"><span>3. 🥉 PlayerOne</span> <span>720</span></div>
+                    <div id="leaderboardList">
+                         <div class="p-4 text-center text-gray-400 text-sm">Conectando ao servidor...</div>
+                    </div>
                     <div class="leaderboard-row text-blue-600 bg-blue-50 border-t-2 border-blue-100">
                         <span>VOCÊ</span> <span id="myHighScoreRank">0</span>
                     </div>
@@ -368,17 +366,57 @@
     // =========================================================================
     // 🛠️ ÁREA DE CONFIGURAÇÃO FÁCIL
     // =========================================================================
+    
+    // 1. CONFIGURAÇÃO DOS GATOS
     const MEUS_GATOS = [
         {
             id: 'g001',
             nome: 'Dionísio',
             raridade: 'comum',
-            imagem: '', 
+            imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/Gemini_Generated_Image_uy5y2puy5y2puy5y%20(1).png', 
             cor_padrao: '#FF9933',
             multiplicador: 1,
-            efeito: 'nenhum'
+            efeito: 'nenhum',
+            escala_imagem: 2.0,  // Aumente para 1.2, 1.5, etc para deixar maior
+            aparecer_na_loja: true // Se true, aparece na loja diária
         },
-        // Adicione mais gatos aqui
+        {
+            id: 'g002',
+            nome: 'Gato Emo',
+            raridade: 'comum',
+            imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/Gemini_Generated_Image_oi2dkjoi2dkjoi2d%20(2).png', 
+            cor_padrao: '#FF9923',
+            multiplicador: 1,
+            efeito: 'nenhum',
+            escala_imagem: 2.0,
+            aparecer_na_loja: true
+        },
+        // Adicione mais gatos aqui...
+    ];
+
+    // 2. CONFIGURAÇÃO DAS NOTÍCIAS
+    const NOTICIAS = [
+        {
+            data: "03/01/2026",
+            titulo: "Bem-vindo ao Gato Bird!",
+            texto: "O jogo foi atualizado! Agora você pode ver notícias e configurar o tamanho dos gatos."
+        },
+        {
+            data: "01/01/2026",
+            titulo: "Evento de Ano Novo",
+            texto: "Em breve novos gatos temáticos estarão disponíveis."
+        }
+    ];
+
+    // 3. CONFIGURAÇÃO DAS CAIXAS DA LOJA
+    // Você pode adicionar ou remover caixas aqui
+    const CAIXAS_LOJA = [
+        { nome: "CAIXA COMUM", raridade: "comum", preco: 10, cor_btn: "bg-gray-400", icone: "📦" },
+        { nome: "CAIXA RARA", raridade: "raro", preco: 25, cor_btn: "bg-blue-500", icone: "📫" },
+        { nome: "CAIXA ÉPICA", raridade: "epico", preco: 50, cor_btn: "bg-purple-600", icone: "🎁" },
+        { nome: "CAIXA LENDÁRIA", raridade: "legendario", preco: 100, cor_btn: "bg-yellow-500", icone: "👑" },
+        { nome: "CAIXA MÍTICA", raridade: "mitico", preco: 250, cor_btn: "bg-red-500", icone: "🔮" },
+        { nome: "CAIXA SECRETA", raridade: "secreta", preco: 500, cor_btn: "bg-gray-900 border-green-500 border", icone: "🌈" }
     ];
 
     const RARITIES = {
@@ -396,20 +434,17 @@
             const img = new Image(); img.src = cat.imagem; cat.imgObj = img;
         }
     });
-
     // =========================================================================
     // ⚙️ SISTEMA DE SAVE (INTEGRADO COM FIREBASE)
     // =========================================================================
     const SAVE_KEY = 'gb_custom_v3';
     let state = { coins: 0, unlocked: ['g001'], equipped: 'g001', highScore: 0 };
-
     // Pontes para o Módulo Firebase acessar o jogo
     window.gameGetState = () => state;
     window.gameSetState = (newData) => {
         state = { ...state, ...newData };
         updateUI();
     };
-    
     // Função Offline
     window.gameLoadLocal = () => {
         try {
@@ -420,7 +455,6 @@
             }
         } catch(e) { console.log("Erro save local"); }
     };
-
     const save = () => {
         // 1. Local (Backup)
         localStorage.setItem(SAVE_KEY, JSON.stringify(state));
@@ -430,14 +464,14 @@
         }
         updateUI();
     };
-
     // --- DAILY SHOP LOGIC ---
     let dailyShopItems = [];
     function updateDailyShop() {
         const now = Date.now();
         const savedShop = JSON.parse(localStorage.getItem('gb_daily_shop_v3'));
         if (!savedShop || now > savedShop.expires) {
-            const pool = MEUS_GATOS.filter(c => ['comum','raro','epico','legendario'].includes(c.raridade));
+            // Filtro adicionado: c.aparecer_na_loja !== false
+            const pool = MEUS_GATOS.filter(c => ['comum','raro','epico','legendario'].includes(c.raridade) && c.aparecer_na_loja !== false);
             const selected = [];
             if (pool.length > 0) {
                 for(let i=0; i<3; i++) { selected.push(pool[Math.floor(Math.random() * pool.length)].id); }
@@ -517,19 +551,27 @@
             ctx.globalAlpha = 0.3; ctx.fill(); ctx.globalAlpha = 1.0;
         }
 
+        // Lógica de Tamanho (Escala)
+        let drawSize = size * (cat.escala_imagem || 1.0);
+
         if (cat.imgObj && cat.imgObj.complete) {
-            ctx.beginPath(); ctx.arc(0, 0, size/2, 0, Math.PI*2); ctx.clip();
-            ctx.drawImage(cat.imgObj, -size/2, -size/2, size, size);
+            ctx.beginPath();
+            // Máscara redonda baseada no tamanho original para não quebrar colisão visual
+            ctx.arc(0, 0, size/2, 0, Math.PI*2); ctx.clip();
+            // Desenha a imagem com o tamanho ajustado
+            ctx.drawImage(cat.imgObj, -drawSize/2, -drawSize/2, drawSize, drawSize);
         } else {
             ctx.fillStyle = cat.cor_padrao;
-            ctx.beginPath(); ctx.arc(0, 0, size/2, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath();
+            ctx.arc(0, 0, size/2, 0, Math.PI*2); ctx.fill();
             // Orelhas
             ctx.beginPath();
             ctx.moveTo(-size*0.3, -size*0.3); ctx.lineTo(-size*0.4, -size*0.6); ctx.lineTo(-size*0.1, -size*0.4); ctx.fill();
             ctx.beginPath(); ctx.moveTo(size*0.3, -size*0.3); ctx.lineTo(size*0.4, -size*0.6); ctx.lineTo(size*0.1, -size*0.4); ctx.fill();
             // Rosto
             ctx.fillStyle = 'rgba(0,0,0,0.2)'; 
-            ctx.beginPath(); ctx.arc(size*0.2, -size*0.1, size*0.05, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath();
+            ctx.arc(size*0.2, -size*0.1, size*0.05, 0, Math.PI*2); ctx.fill();
             ctx.beginPath(); ctx.arc(-size*0.2, -size*0.1, size*0.05, 0, Math.PI*2); ctx.fill();
         }
         ctx.restore();
@@ -540,7 +582,6 @@
     const ctx = canvas.getContext('2d');
     let frames=0, score=0, playing=false, trail=[];
     let speed=3.5, gravity=0.25;
-    
     const bird = {
         x: 60, y: 150, v: 0,
         update: function() {
@@ -680,8 +721,10 @@
             if(name === 'shop') {
                 document.getElementById('shopBalance').innerText = state.coins;
                 updateDailyShop();
+                renderShopBoxes(); // Renderiza as caixas configuradas
             }
             if(name === 'collection') renderCollection();
+            if(name === 'news') renderNews();
             if(name === 'leaderboard') {
                  document.getElementById('myHighScoreRank').innerText = state.highScore;
             }
@@ -717,6 +760,40 @@
             }, 1000);
         }
     };
+
+    function renderShopBoxes() {
+        const container = document.getElementById('boxesContainer');
+        container.innerHTML = '';
+        CAIXAS_LOJA.forEach(box => {
+            const btn = document.createElement('button');
+            btn.className = `btn ${box.cor_btn} flex justify-between items-center p-2`;
+            btn.onclick = () => game.buyBox(box.raridade, box.preco);
+            btn.innerHTML = `
+                <div class="flex items-center gap-2"><span class="text-xl">${box.icone}</span> <span class="text-sm uppercase">${box.nome}</span></div> 
+                <span>${box.preco} 💰</span>
+            `;
+            container.appendChild(btn);
+        });
+    }
+
+    function renderNews() {
+        const container = document.getElementById('newsList');
+        container.innerHTML = '';
+        if(NOTICIAS.length === 0) {
+            container.innerHTML = '<div class="text-gray-400 p-4">Nenhuma notícia no momento.</div>';
+            return;
+        }
+        NOTICIAS.forEach(news => {
+            const div = document.createElement('div');
+            div.className = 'news-item';
+            div.innerHTML = `
+                <div class="news-date">${news.data}</div>
+                <div class="news-title">${news.titulo}</div>
+                <div class="news-body">${news.texto}</div>
+            `;
+            container.appendChild(div);
+        });
+    }
 
     function updateUI() {
         const cat = MEUS_GATOS.find(c => c.id === state.equipped) || MEUS_GATOS[0];
@@ -778,5 +855,4 @@
 })();
 </script>
 </body>
-
 </html>
