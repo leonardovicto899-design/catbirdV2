@@ -9,15 +9,14 @@
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap');
-        
         body {
             font-family: 'Fredoka', sans-serif;
             overflow: hidden;
-            touch-action: none; /* Impede gestos padrão do navegador */
+            touch-action: none;
             background-color: #1a1a1a;
             user-select: none;
             margin: 0; padding: 0;
-            position: fixed; /* Trava a tela no iOS */
+            position: fixed; 
             width: 100%;
             height: 100%;
         }
@@ -26,8 +25,7 @@
             position: relative;
             width: 100vw; 
             height: 100vh;
-            /* MELHORIA MOBILE: Usa dvh para ignorar barras de navegador móvel */
-            height: 100dvh; 
+            height: 100dvh;
             background: linear-gradient(180deg, #63a4ff 0%, #83eaf1 100%);
             overflow: hidden;
         }
@@ -46,7 +44,7 @@
             z-index: 20;
             background: rgba(0,0,0,0.5);
             backdrop-filter: blur(3px);
-            padding: 20px; /* Espaço seguro nas bordas */
+            padding: 20px; 
             box-sizing: border-box;
         }
         
@@ -59,9 +57,9 @@
             box-shadow: 0 20px 50px rgba(0,0,0,0.3);
             text-align: center;
             width: 100%;
-            max-width: 400px; /* Limite para telas grandes */
+            max-width: 400px;
             border: 1px solid rgba(255,255,255,0.5);
-            max-height: 85dvh; /* Altura segura mobile */
+            max-height: 85dvh; 
             display: flex;
             flex-direction: column;
             animation: floatIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -89,7 +87,7 @@
         
         .skin-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr); /* 4 colunas fica melhor em mobile */
+            grid-template-columns: repeat(4, 1fr); 
             gap: 8px;
             padding: 5px;
         }
@@ -112,6 +110,21 @@
         .skin-item:active { transform: scale(0.9); }
         .skin-item.selected { border-color: #F59E0B; box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.3); z-index: 10; transform: scale(1.05); }
         
+        /* NOVO: Badge de contagem de gatos */
+        .count-badge {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            background: #EF4444;
+            color: white;
+            font-size: 10px;
+            font-weight: 900;
+            padding: 1px 5px;
+            border-radius: 10px;
+            border: 1px solid white;
+            z-index: 5;
+        }
+
         #dropNotif {
             position: absolute;
             top: 15%;
@@ -141,7 +154,6 @@
         .news-title { font-weight: 800; color: #374151; font-size: 1rem; }
         .news-body { font-size: 0.85rem; color: #4b5563; margin-top: 4px; line-height: 1.2; }
 
-        /* Botão Mute Flutuante */
         #muteBtn {
             position: absolute;
             top: 20px;
@@ -159,7 +171,6 @@
         }
         #muteBtn:active { transform: scale(0.9); }
         
-        /* Custom Scrollbar */
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
@@ -168,9 +179,9 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-        // Importando funções necessárias do Firestore
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+        // ADICIONEI: updateProfile e where na importação
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
         
         const firebaseConfig = {
             apiKey: "AIzaSyAh1Xzb616gPPnnmrjTJSGKp1zwosuVO7w",
@@ -183,10 +194,8 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+        window.firebaseDb = db;
         
-        // Expondo DB para o escopo global do jogo
-        window.firebaseDb = db; 
-
         window.authSystem = {
             user: null,
             login: async () => {
@@ -208,24 +217,67 @@
                     await createUserWithEmailAndPassword(auth, email, pass);
                 } catch (error) { msg.innerText = "Erro: " + error.message; }
             },
+            // NOVO: Função para salvar nome único
+            saveName: async () => {
+                const nameInp = document.getElementById('nameInput');
+                const msg = document.getElementById('nameMsg');
+                const name = nameInp.value.trim().toUpperCase(); // Forçar uppercase para padronizar
+                
+                if(name.length < 3 || name.length > 10) return msg.innerText = "Nome deve ter 3-10 letras";
+                
+                msg.innerText = "Verificando disponibilidade...";
+                
+                try {
+                    // Verifica se nome existe no banco
+                    const q = query(collection(db, "users"), where("displayName", "==", name));
+                    const querySnapshot = await getDocs(q);
+                    
+                    if(!querySnapshot.empty) {
+                        return msg.innerText = "Nome já existe! Tente outro.";
+                    }
+                    
+                    const user = auth.currentUser;
+                    // Salva no Auth Profile e no Firestore
+                    await updateProfile(user, { displayName: name });
+                    await setDoc(doc(db, "users", user.uid), { displayName: name }, { merge: true });
+                    
+                    // Esconde tela e carrega jogo
+                    document.getElementById('nameSetupScreen').classList.add('hidden');
+                    window.location.reload(); // Recarrega para atualizar tudo limpo
+                    
+                } catch(e) {
+                    console.error(e);
+                    msg.innerText = "Erro ao salvar: " + e.message;
+                }
+            },
             logout: async () => {
                 await signOut(auth);
                 window.location.reload();
             },
             playOffline: () => {
                 document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('nameSetupScreen').classList.add('hidden'); // Garante que some
                 if(window.gameLoadLocal) window.gameLoadLocal();
             },
             saveData: async (data) => {
                 if(!window.authSystem.user) return;
-                try { await setDoc(doc(db, "users", window.authSystem.user.uid), data); } 
+                try { await setDoc(doc(db, "users", window.authSystem.user.uid), data, { merge: true }); } 
                 catch(e) { console.error("Erro nuvem:", e); }
             }
         };
+        
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 window.authSystem.user = user;
                 document.getElementById('authMsg').innerText = "Sucesso!";
+                
+                // NOVO: Verifica se tem nome, se não tiver, mostra tela de nome
+                if(!user.displayName) {
+                    document.getElementById('loginScreen').classList.add('hidden');
+                    document.getElementById('nameSetupScreen').classList.remove('hidden');
+                    return; // Para aqui até usuário colocar nome
+                }
+
                 document.getElementById('logoutBtn').classList.remove('hidden');
                 
                 const docRef = doc(db, "users", user.uid);
@@ -239,13 +291,10 @@
             }
         });
         
-        // Função para carregar Leaderboard do Firebase
         window.loadFirebaseLeaderboard = async () => {
             const list = document.getElementById('leaderboardList');
             list.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm"><i class="fas fa-spinner fa-spin"></i> Carregando Top 10...</div>';
-            
             try {
-                // Query para pegar os top 10 scores
                 const q = query(collection(db, "users"), orderBy("highScore", "desc"), limit(10));
                 const querySnapshot = await getDocs(q);
                 
@@ -259,21 +308,14 @@
                 let rank = 1;
                 querySnapshot.forEach((doc) => {
                     const data = doc.data();
-                    // Proteção para nomes vazios ou e-mails
-                    let displayName = "Jogador Anônimo";
-                    // Tenta usar o e-mail mascarado se não tiver nome (só exemplo, o auth tem email)
-                    // Aqui assumimos que o documento do usuário pode ter um campo 'nome' futuramente, ou usamos ID
-                    if(data.equipped) {
-                         // Tenta achar o nome do gato equipado para dar "personalidade" se não tiver nome de user
-                         // Mas o ideal é salvar o nome do user. Vamos usar o ID encurtado por enquanto.
-                         displayName = "User " + doc.id.substring(0, 5);
-                    }
+                    // NOVO: Usa o displayName do banco em vez de "User..."
+                    let displayName = data.displayName || "Anônimo";
                     
                     const row = document.createElement('div');
                     row.className = 'leaderboard-row';
-                    if (rank === 1) row.style.color = '#F59E0B'; // Ouro
-                    else if (rank === 2) row.style.color = '#9CA3AF'; // Prata
-                    else if (rank === 3) row.style.color = '#B45309'; // Bronze
+                    if (rank === 1) row.style.color = '#F59E0B';
+                    else if (rank === 2) row.style.color = '#9CA3AF';
+                    else if (rank === 3) row.style.color = '#B45309';
                     
                     row.innerHTML = `
                         <span>#${rank} ${displayName}</span>
@@ -287,22 +329,17 @@
                 list.innerHTML = '<div class="p-4 text-center text-red-400 text-sm">Erro ao carregar ranking.</div>';
             }
         };
-
-        // Função para carregar/gerar Loja no Servidor
+        
         window.syncServerShop = async () => {
             try {
                 const shopRef = doc(db, "server", "dailyShop");
                 const snap = await getDoc(shopRef);
                 const now = Date.now();
                 let shopData = null;
-
-                // Verifica se existe e se não expirou
                 if (snap.exists()) {
                     shopData = snap.data();
                 }
 
-                // Se não existe ou expirou, gera nova (Client-side generation, saved to Server)
-                // Nota: Em um app grande, isso seria uma Cloud Function. Aqui faremos o cliente atualizar.
                 if (!shopData || now > shopData.expires) {
                     const pool = window.GAME_CATS.filter(c => ['comum','raro','epico','legendario'].includes(c.raridade) && c.aparecer_na_loja !== false);
                     const selected = [];
@@ -311,25 +348,21 @@
                             selected.push(pool[Math.floor(Math.random() * pool.length)].id);
                         }
                     }
-                    // Expira em 24h
                     shopData = { items: selected, expires: now + 86400000 };
                     await setDoc(shopRef, shopData);
                 }
 
-                // Retorna os dados para o jogo
                 if (window.updateShopFromData) {
                     window.updateShopFromData(shopData);
                 }
 
             } catch (e) {
                 console.error("Erro Shop Server:", e);
-                // Fallback para local se der erro no servidor
                 if (window.updateShopFromData) {
-                    window.updateShopFromData(null); // Null vai forçar fallback local
+                    window.updateShopFromData(null);
                 }
             }
         };
-
     </script>
 </head>
 <body>
@@ -341,6 +374,16 @@
         
         <div id="muteBtn" class="interactive" onclick="game.toggleMute()">
             <i class="fas fa-volume-up" id="muteIcon"></i>
+        </div>
+
+        <div id="nameSetupScreen" class="ui-layer interactive z-50 hidden">
+            <div class="card">
+                <h1 class="text-3xl font-black text-orange-500 mb-2">QUEM É VOCÊ?</h1>
+                <p class="text-sm text-gray-400 mb-6 font-bold">Escolha um nome único para o Rank</p>
+                <input type="text" id="nameInput" placeholder="Seu Nome" maxlength="10" class="w-full bg-gray-100 p-3 rounded-xl mb-3 border-2 border-gray-200 font-bold text-gray-700 outline-none focus:border-orange-400 text-center uppercase">
+                <button class="btn bg-orange-500 mb-2" onclick="authSystem.saveName()">CONFIRMAR NOME</button>
+                <div id="nameMsg" class="mt-4 text-xs font-black text-red-500 h-4"></div>
+            </div>
         </div>
 
         <div id="loginScreen" class="ui-layer interactive z-50">
@@ -476,6 +519,7 @@
             <div id="gachaResult" class="hidden flex flex-col items-center w-full">
                 <div class="card">
                     <div id="gachaNewLabel" class="text-green-500 font-black tracking-widest animate-pulse mb-4 text-xl">NOVO!</div>
+                    <div id="gachaDupLabel" class="hidden text-yellow-500 font-black tracking-widest mb-4 text-xl">REPETIDO (ACUMULOU!)</div>
                     <div class="bg-gray-100 rounded-full p-6 mb-4">
                         <canvas id="gachaPreview" width="120" height="120"></canvas>
                     </div>
@@ -519,7 +563,8 @@
         gameover: '',
         click: ''
     };
-
+    
+    // SEUS GATOS ORIGINAIS
     const MEUS_GATOS = [
         {
             id: 'g001',
@@ -538,7 +583,7 @@
             raridade: 'comum',
             imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/Gemini_Generated_Image_oi2dkjoi2dkjoi2d%20(2).png', 
             cor_padrao: '#FF9923',
-            multiplicador: 1,
+            multiplicador: 1.1,
             efeito: 'nenhum',
             escala_imagem: 1.3,
             aparecer_na_loja: true
@@ -549,7 +594,7 @@
             raridade: 'comum',
             imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/WhatsApp%20Image%202026-01-03%20at%2001.36.43.png', 
             cor_padrao: '#FF9923',
-            multiplicador: 1,
+            multiplicador: 1.2,
             efeito: 'nenhum',
             escala_imagem: 1.3,
             aparecer_na_loja: true
@@ -560,7 +605,7 @@
             raridade: 'comum',
             imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163730730.png', 
             cor_padrao: '#FF9923',
-            multiplicador: 1,
+            multiplicador: 1.3,
             efeito: 'nenhum',
             escala_imagem: 1.3,
             aparecer_na_loja: true
@@ -571,7 +616,7 @@
             raridade: 'comum',
             imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163712740.png', 
             cor_padrao: '#FF9923',
-            multiplicador: 1,
+            multiplicador: 1.3,
             efeito: 'nenhum',
             escala_imagem: 1.3,
             aparecer_na_loja: true
@@ -582,7 +627,7 @@
             raridade: 'comum',
             imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163653076.png', 
             cor_padrao: '#FF9923',
-            multiplicador: 1,
+            multiplicador: 1.4,
             efeito: 'nenhum',
             escala_imagem: 1.3,
             aparecer_na_loja: true
@@ -593,7 +638,7 @@
             raridade: 'comum',
             imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/gato-laranja-filhote.webp', 
             cor_padrao: '#FF9923',
-            multiplicador: 1,
+            multiplicador: 1.4,
             efeito: 'nenhum',
             escala_imagem: 1.3,
             aparecer_na_loja: true
@@ -604,7 +649,7 @@
             raridade: 'comum',
             imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/37lea95r4h161%20(1).webp', 
             cor_padrao: '#FF9923',
-            multiplicador: 1,
+            multiplicador: 1.4,
             efeito: 'nenhum',
             escala_imagem: 1.3,
             aparecer_na_loja: true
@@ -615,7 +660,7 @@
             raridade: 'raro',
             imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/stray-review_7wxr.jpg', 
             cor_padrao: '#FF9923',
-            multiplicador: 1,
+            multiplicador: 1.5,
             efeito: 'nenhum',
             escala_imagem: 1.3,
             aparecer_na_loja: true
@@ -626,7 +671,7 @@
             raridade: 'epico',
             imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/AAT001-P001-89335-1-m-Divulgacao_1.jpg', 
             cor_padrao: '#FF9923',
-            multiplicador: 1,
+            multiplicador: 1.6,
             efeito: 'nenhum',
             escala_imagem: 1.3,
             aparecer_na_loja: true
@@ -637,7 +682,7 @@
             raridade: 'epico',
             imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163603209.png', 
             cor_padrao: '#FF9923',
-            multiplicador: 1,
+            multiplicador: 1.6,
             efeito: 'nenhum',
             escala_imagem: 1.3,
             aparecer_na_loja: true
@@ -648,7 +693,7 @@
             raridade: 'raro',
             imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/images.png', 
             cor_padrao: '#FF9923',
-            multiplicador: 1,
+            multiplicador: 1.7,
             efeito: 'nenhum',
             escala_imagem: 1.3,
             aparecer_na_loja: true
@@ -670,7 +715,7 @@
             raridade: 'legendario',
             imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163836118.png', 
             cor_padrao: '#FF9923',
-            multiplicador: 1.5,
+            multiplicador: 2,
             efeito: 'nenhum',
             escala_imagem: 1.3,
             aparecer_na_loja: false
@@ -687,13 +732,13 @@
             aparecer_na_loja: false
         },
     ];
-    // Expondo gatos para a função global de servidor
+    
     window.GAME_CATS = MEUS_GATOS;
-
+    
     const NOTICIAS = [
         {
             data: "03/01/2026",
-            titulo: "NOVOS GATOS",
+            titulo: "GATOS ACUMULAM",
             texto: ""
         },
         {
@@ -702,16 +747,17 @@
             texto: "Divirta-se jogando."
         }
     ];
-
+    
+    // PREÇOS AJUSTADOS (DIFICULTADOS)
     const CAIXAS_LOJA = [
-        { nome: "CAIXA COMUM", raridade: "comum", preco: 25, cor_btn: "bg-gray-400", icone: "📦" },
-	{ nome: "CAIXA RARA", raridade: "raro", preco: 100, cor_btn: "bg-blue-500", icone: "📫" },
-	{ nome: "CAIXA ÉPICA", raridade: "epico", preco: 250, cor_btn: "bg-purple-600", icone: "🎁" },
-	{ nome: "CAIXA LENDÁRIA", raridade: "legendario", preco: 500, cor_btn: "bg-yellow-500", icone: "👑" },
-        { nome: "CAIXA MÍTICA", raridade: "mitico", preco: 1500, cor_btn: "bg-red-500", icone: "🔮" },
-	{ nome: "CAIXA SECRETA", raridade: "secreta", preco: 9999, cor_btn: "bg-gray-900 border-green-500 border", icone: "🌈" }
+        { nome: "CAIXA COMUM", raridade: "comum", preco: 20, cor_btn: "bg-gray-400", icone: "📦" },
+	{ nome: "CAIXA RARA", raridade: "raro", preco: 50, cor_btn: "bg-blue-500", icone: "📫" },
+	{ nome: "CAIXA ÉPICA", raridade: "epico", preco: 125, cor_btn: "bg-purple-600", icone: "🎁" },
+	{ nome: "CAIXA LENDÁRIA", raridade: "legendario", preco: 350, cor_btn: "bg-yellow-500", icone: "👑" },
+        { nome: "CAIXA MÍTICA", raridade: "mitico", preco: 750, cor_btn: "bg-red-500", icone: "🔮" },
+	{ nome: "CAIXA SECRETA", raridade: "secreta", preco: 2000, cor_btn: "bg-gray-900 border-green-500 border", icone: "🌈" }
     ];
-
+    
     const RARITIES = {
         comum: { label: 'Comum', color: '#9CA3AF' },
         raro: { label: 'Raro', color: '#3B82F6' },
@@ -721,16 +767,12 @@
         secreta: { label: 'Secreto', color: '#10B981' }
     };
 
-    // Preload Imagens
     MEUS_GATOS.forEach(cat => {
         if(cat.imagem && cat.imagem.length > 5) {
             const img = new Image(); img.src = cat.imagem; cat.imgObj = img;
         }
     });
 
-    // =========================================================================
-    // 🎵 SISTEMA DE AUDIO
-    // =========================================================================
     const audioCtx = {
         muted: false,
         play: (key) => {
@@ -754,10 +796,14 @@
     // ⚙️ SISTEMA DE SAVE
     // =========================================================================
     const SAVE_KEY = 'gb_custom_v3';
-    let state = { coins: 0, unlocked: ['g001'], equipped: 'g001', highScore: 0 };
+    // ADICIONADO: 'counts' para contar duplicatas
+    let state = { coins: 0, unlocked: ['g001'], equipped: 'g001', highScore: 0, counts: {'g001':1} };
+    
     window.gameGetState = () => state;
     window.gameSetState = (newData) => {
         state = { ...state, ...newData };
+        // Garante que counts existe ao carregar save antigo
+        if(!state.counts) { state.counts = {}; state.unlocked.forEach(id => state.counts[id]=1); }
         updateUI();
     };
     window.gameLoadLocal = () => {
@@ -765,6 +811,7 @@
             const saved = localStorage.getItem(SAVE_KEY);
             if(saved) {
                 state = {...state, ...JSON.parse(saved)};
+                if(!state.counts) { state.counts = {}; state.unlocked.forEach(id => state.counts[id]=1); }
                 updateUI();
             }
         } catch(e) { console.log("Erro save local"); }
@@ -777,14 +824,11 @@
         updateUI();
     };
 
-    // --- DAILY SHOP LOGIC (SERVER-SIDE HYBRID) ---
     let dailyShopItems = [];
     let dailyShopExpires = 0;
 
-    // Função chamada pelo módulo externo do Firebase quando recebe dados
     window.updateShopFromData = (shopData) => {
         if(!shopData) {
-            // Fallback para local se servidor falhar
             updateDailyShopLocal();
             return;
         }
@@ -792,9 +836,7 @@
         dailyShopExpires = shopData.expires;
         renderDailyShop();
     };
-
     function updateDailyShopLocal() {
-        // Fallback antigo caso banco de dados falhe
         const now = Date.now();
         const savedShop = JSON.parse(localStorage.getItem('gb_daily_shop_v3'));
         if (!savedShop || now > savedShop.expires) {
@@ -819,7 +861,7 @@
         container.innerHTML = '';
         if(!dailyShopItems || dailyShopItems.length === 0) {
              container.innerHTML = '<div class="text-xs text-gray-400 p-2">Loja vazia ou carregando...</div>';
-             return;
+            return;
         }
         dailyShopItems.forEach(id => {
             const cat = MEUS_GATOS.find(c => c.id === id);
@@ -842,14 +884,17 @@
             
             const btn = document.createElement('button');
             btn.className = `text-[9px] px-2 py-1 rounded mt-1 text-white font-bold ${owned ? 'bg-green-500' : 'bg-blue-500'}`;
-            btn.innerText = owned ? 'JÁ TEM' : `${price} 💰`;
+            // Se já tem, mostra qts tem
+            btn.innerText = owned ? `TEM (x${state.counts[id]||1})` : `${price} 💰`;
             btn.onclick = () => {
-                if(owned) return;
+                // Permitir acumular
                 if(state.coins >= price) {
                     state.coins -= price;
-                    state.unlocked.push(id);
+                    if(!state.unlocked.includes(id)) state.unlocked.push(id);
+                    state.counts[id] = (state.counts[id] || 0) + 1;
+                    
                     save();
-                    renderDailyShop(); // Re-renderiza para mostrar como "JÁ TEM"
+                    renderDailyShop(); 
                     audioCtx.play('click');
                     alert(`Comprou ${cat.nome}!`);
                 } else { alert('Moedas insuficientes!'); }
@@ -859,7 +904,6 @@
         });
     }
 
-    // Timer Global
     setInterval(() => {
         if(dailyShopExpires > 0) {
             const diff = dailyShopExpires - Date.now();
@@ -875,8 +919,6 @@
         }
     }, 1000);
 
-
-    // --- DRAWING ENGINE ---
     function drawCat(ctx, cat, x, y, size, frame) {
         ctx.save();
         ctx.translate(x, y);
@@ -898,7 +940,6 @@
             ctx.fillStyle = cat.cor_padrao;
             ctx.beginPath();
             ctx.arc(0, 0, size/2, 0, Math.PI*2); ctx.fill();
-            // Orelhas
             ctx.beginPath();
             ctx.moveTo(-size*0.3, -size*0.3); ctx.lineTo(-size*0.4, -size*0.6); ctx.lineTo(-size*0.1, -size*0.4); ctx.fill();
             ctx.beginPath(); ctx.moveTo(size*0.3, -size*0.3); ctx.lineTo(size*0.4, -size*0.6); ctx.lineTo(size*0.1, -size*0.4); ctx.fill();
@@ -906,13 +947,10 @@
         ctx.restore();
     }
 
-    // --- GAME ENGINE ---
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     let frames=0, score=0, playing=false, trail=[];
     let speed=3.0, gravity=0.25;
-    
-    // Background Elements
     let clouds = [];
     for(let i=0; i<5; i++) {
         clouds.push({x: Math.random()*window.innerWidth, y: Math.random()*200, s: 0.5+Math.random()});
@@ -946,7 +984,6 @@
             this.y += this.v;
             if(this.y + 15 > canvas.height) gameOver();
             if(this.y < 0) this.y = 0;
-            
             const cat = MEUS_GATOS.find(c => c.id === state.equipped);
             if(cat && (cat.efeito === 'rastro' || cat.efeito === 'arco_iris' || cat.efeito === 'fogo')) {
                 trail.push({x: this.x, y: this.y, age: 0});
@@ -986,12 +1023,9 @@
             }
             this.list.forEach(p => {
                 p.x -= speed;
-                
-                // Colisão simples
                 if(bird.x + 20 > p.x && bird.x - 20 < p.x + 60) {
                     if(bird.y - 20 < p.y || bird.y + 20 > p.y + p.gap) gameOver();
                 }
-                
                 if(p.x + 60 < bird.x && !p.scored) {
                     p.scored = true;
                     score++;
@@ -1010,16 +1044,13 @@
                 grad.addColorStop(0, '#4ade80'); 
                 grad.addColorStop(0.5, '#22c55e'); 
                 grad.addColorStop(1, '#14532d'); 
-                
                 ctx.fillStyle = grad;
                 ctx.strokeStyle = '#000';
                 ctx.lineWidth = 2;
-
                 ctx.fillRect(p.x, 0, 60, p.y);
                 ctx.strokeRect(p.x, -2, 60, p.y+2);
                 ctx.fillRect(p.x-4, p.y-25, 68, 25);
                 ctx.strokeRect(p.x-4, p.y-25, 68, 25);
-                
                 let by = p.y + p.gap;
                 ctx.fillRect(p.x, by, 60, canvas.height-by);
                 ctx.strokeRect(p.x, by, 60, canvas.height-by);
@@ -1034,23 +1065,20 @@
         d.classList.remove('hidden');
         if(MEUS_GATOS.length > 1) {
             const win = MEUS_GATOS[Math.floor(Math.random()*MEUS_GATOS.length)];
+            // Acumula no bonus tambem
             if(!state.unlocked.includes(win.id)) state.unlocked.push(win.id);
+            state.counts[win.id] = (state.counts[win.id] || 0) + 1;
             save();
         }
         setTimeout(() => d.classList.add('hidden'), 2500);
     }
 
     function loop() {
-        // Correção Mobile: Redimensionamento constante não é bom, mas o Canvas precisa se ajustar
-        // Movido para Event Listener 'resize' para performance
         ctx.clearRect(0,0,canvas.width,canvas.height);
-        
         drawBackground();
-        
         if(playing) { bird.update(); pipes.update(); frames++; }
         pipes.draw();
         bird.draw();
-
         if(!playing && !document.getElementById('menuScreen').classList.contains('hidden')) {
             const mCtx = document.getElementById('menuPreview').getContext('2d');
             mCtx.clearRect(0,0,100,100);
@@ -1059,7 +1087,6 @@
         requestAnimationFrame(loop);
     }
     
-    // MELHORIA MOBILE: Ajuste de tela
     function resizeCanvas() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -1067,7 +1094,6 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
     loop();
-
     function gameOver() {
         playing = false;
         audioCtx.play('gameover');
@@ -1078,13 +1104,13 @@
         document.getElementById('finalCoins').innerText = state.coins;
     }
 
-    // --- UI CONTROLLER ---
     window.game = {
         startGame: () => {
             playing = true;
             score = 0; frames = 0; trail = [];
             bird.x = Math.max(60, canvas.width * 0.2);
-            bird.y = canvas.height/2; bird.v = 0;
+            bird.y = canvas.height/2;
+            bird.v = 0;
             pipes.list = [];
             document.querySelectorAll('.ui-layer').forEach(l => l.classList.add('hidden'));
             document.getElementById('hud').classList.remove('hidden');
@@ -1099,7 +1125,6 @@
             if(name === 'menu') updateUI();
             if(name === 'shop') {
                 document.getElementById('shopBalance').innerText = state.coins;
-                // Busca loja no servidor
                 if(window.syncServerShop) window.syncServerShop();
                 renderShopBoxes();
             }
@@ -1107,7 +1132,6 @@
             if(name === 'news') renderNews();
             if(name === 'leaderboard') {
                  document.getElementById('myHighScoreRank').innerText = state.highScore;
-                 // Busca Leaderboard no servidor
                  if(window.loadFirebaseLeaderboard) window.loadFirebaseLeaderboard();
             }
         },
@@ -1120,9 +1144,13 @@
             save();
 
             const win = pool[Math.floor(Math.random()*pool.length)];
+            // LÓGICA DE ACUMULAR
             const isNew = !state.unlocked.includes(win.id);
             if(isNew) state.unlocked.push(win.id);
-            else state.coins += Math.floor(cost*0.2);
+            
+            // Incrementa contador
+            state.counts[win.id] = (state.counts[win.id] || 0) + 1;
+            
             save();
 
             document.getElementById('shopScreen').classList.add('hidden');
@@ -1132,7 +1160,16 @@
             setTimeout(() => {
                 document.getElementById('boxAnim').classList.add('hidden');
                 document.getElementById('gachaResult').classList.remove('hidden');
-                document.getElementById('gachaNewLabel').innerText = isNew ? "NOVO GATO!" : "REPETIDO (+BÔNUS)";
+                
+                // Mostra se é novo ou repetido
+                if(isNew) {
+                    document.getElementById('gachaNewLabel').classList.remove('hidden');
+                    document.getElementById('gachaDupLabel').classList.add('hidden');
+                } else {
+                    document.getElementById('gachaNewLabel').classList.add('hidden');
+                    document.getElementById('gachaDupLabel').classList.remove('hidden');
+                }
+                
                 document.getElementById('gachaName').innerText = win.nome;
                 document.getElementById('gachaRarity').innerText = RARITIES[win.raridade]?.label || 'Especial';
                 document.getElementById('gachaRarity').style.backgroundColor = RARITIES[win.raridade]?.color || '#000';
@@ -1213,6 +1250,9 @@
             grid.className = 'skin-grid';
             pool.forEach(cat => {
                 const owned = state.unlocked.includes(cat.id);
+                // Badge Count
+                const count = state.counts[cat.id] || 0;
+                
                 const item = document.createElement('div');
                 item.className = `skin-item ${owned ? '' : 'locked'} ${state.equipped === cat.id ? 'selected' : ''}`;
                 
@@ -1220,6 +1260,15 @@
                 cvs.width = 40; cvs.height = 40;
                 drawCat(cvs.getContext('2d'), cat, 20, 20, 30, 0);
                 item.appendChild(cvs);
+
+                // Mostra badge se tiver mais de 1
+                if(owned && count > 1) {
+                    const badge = document.createElement('div');
+                    badge.className = 'count-badge';
+                    badge.innerText = `x${count}`;
+                    item.appendChild(badge);
+                }
+
                 item.onclick = () => {
                     if(owned) { 
                         state.equipped = cat.id;
@@ -1243,5 +1292,3 @@
 </script>
 </body>
 </html>
-
-
