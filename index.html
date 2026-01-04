@@ -734,38 +734,38 @@
         }
     ];
     // SONS EM BASE64 FUNCIONAIS (Substituindo links quebrados)
-   // const B64_JUMP = "data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAAAAABkYXRhAAAAAA=="; // Placeholder curto
+    const B64_JUMP = "data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAAAAABkYXRhAAAAAA=="; // Placeholder curto
     // Como os sons Base64 reais são longos, vou usar sons gerados proceduralmente ou placeholder simples.
     // Para garantir funcionamento, usarei apenas um beep simples gerado por AudioContext ou URLs confiáveis se possível. 
     // Como pedido "Sons Funcionais", vou usar URLs de CDN mais estáveis ou Base64 curtos de beep.
     
     // Usando sons curtos 8-bit em Base64
-//    const SND_JUMP = "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"+Array(50).join("AP8")+"//8AAP//AAD//wAA//8AAP//AAD//wAA";
- //   const SND_SCORE = "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"+Array(50).join("AP8")+"//8AAP//AAD//wAA//8AAP//AAD//wAA";
+    const SND_JUMP = "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"+Array(50).join("AP8")+"//8AAP//AAD//wAA//8AAP//AAD//wAA";
+    const SND_SCORE = "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"+Array(50).join("AP8")+"//8AAP//AAD//wAA//8AAP//AAD//wAA";
     
     // A melhor abordagem sem arquivos externos é usar o AudioContext para gerar sons (sintetizador).
-  //  const synthAudio = {
-    //    playTone: (freq, type, duration) => {
-       ////     if(audioCtx.muted) return;
-         //   const ctx = new (window.AudioContext || window.webkitAudioContext)();
-         //   const osc = ctx.createOscillator();
-         //   const gain = ctx.createGain();
-          //  osc.type = type;
-         //   osc.frequency.setValueAtTime(freq, ctx.currentTime);
-          //  gain.gain.setValueAtTime(0.1, ctx.currentTime);
-         //   gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-          //  osc.connect(gain);
-          //  gain.connect(ctx.destination);
-          //  osc.start();
-          //  osc.stop(ctx.currentTime + duration);
+    const synthAudio = {
+        playTone: (freq, type, duration) => {
+            if(audioCtx.muted) return;
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, ctx.currentTime);
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + duration);
         }
     };
 
-  //  const SONS = {
-     //   pulo: () => synthAudio.playTone(400, 'square', 0.1),
-     //   score: () => synthAudio.playTone(1000, 'sine', 0.1),
-     //   gameover: () => synthAudio.playTone(150, 'sawtooth', 0.5),
-      //  click: () => synthAudio.playTone(600, 'triangle', 0.05)
+    const SONS = {
+        pulo: () => synthAudio.playTone(400, 'square', 0.1),
+        score: () => synthAudio.playTone(1000, 'sine', 0.1),
+        gameover: () => synthAudio.playTone(150, 'sawtooth', 0.5),
+        click: () => synthAudio.playTone(600, 'triangle', 0.05)
     };
 
     const MEUS_GATOS = [
@@ -788,7 +788,7 @@
         { id: 'g017', nome: 'Gato em pé', raridade: 'legendario', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_180044488.png', cor_padrao: '#FF9923', multiplicador: 3, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
         { id: 'g018', nome: 'gato de schrödinger morto', raridade: 'secreta', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_180259424.png', cor_padrao: '#FF9923', multiplicador: 5, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
         { id: 'g019', nome: 'gato de schrödinger vivo', raridade: 'secreta', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_180327109.png', cor_padrao: '#FF9923', multiplicador: 5, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
-        { id: 'g020', nome: 'victor xavier', raridade: 'exclusivo', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_180439637.png', cor_padrao: '#FF9923', multiplicador: 10, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
+        { id: 'g020', nome: 'victor xavier', raridade: '', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_180439637.png', cor_padrao: '#FF9923', multiplicador: 10, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
     ];
     window.GAME_CATS = MEUS_GATOS;
     
@@ -813,8 +813,7 @@
         epico: { label: 'Épico', color: '#A855F7' },
         legendario: { label: 'Lendário', color: '#EAB308' },
         mitico: { label: 'Mítico', color: '#EF4444' },
-        secreta: { label: 'Secreto', color: '#10B981' },
-		exclusivo: { label: 'Exclusivo', color: '##535353' }
+        secreta: { label: 'Secreto', color: '#10B981' }
     };
     
     MEUS_GATOS.forEach(cat => {
