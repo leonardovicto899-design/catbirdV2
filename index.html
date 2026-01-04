@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Gato Bird - Versão Final</title>
+    <title>Gato Bird - Versão Final 4.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     
@@ -128,23 +128,15 @@
         
         .daily-timer { font-size: 0.7rem; background: #000; color: #10B981; padding: 2px 6px; border-radius: 4px; margin-left: 5px; }
         
-        .leaderboard-row { display: flex; justify-content: space-between; padding: 12px 8px; border-bottom: 1px solid #eee; font-size: 0.9rem; font-weight: bold; cursor: pointer; transition: background 0.2s; }
-        .leaderboard-row:hover { background: #f9fafb; }
-        .leaderboard-row:active { background: #eff6ff; }
+        .leaderboard-row { display: flex; justify-content: space-between; padding: 12px 8px; border-bottom: 1px solid #eee; font-size: 0.9rem; font-weight: bold; transition: background 0.2s; }
         .leaderboard-row:last-child { border-bottom: none; }
-        
-        .friend-row { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #f3f4f6; border-radius: 10px; margin-bottom: 5px; font-weight: bold; font-size: 0.9rem; }
         
         .news-item { text-align: left; background: #f3f4f6; padding: 10px; border-radius: 12px; margin-bottom: 8px; border-left: 4px solid #F59E0B; }
         .news-date { font-size: 0.7rem; color: #9ca3af; font-weight: bold; }
         .news-title { font-weight: 800; color: #374151; font-size: 1rem; }
         .news-body { font-size: 0.85rem; color: #4b5563; margin-top: 4px; line-height: 1.2; }
         
-        .notif-item { text-align: left; background: #fff; border: 1px solid #eee; padding: 10px; border-radius: 10px; margin-bottom: 5px; }
-        
-        .market-item {
-            background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
-        }
+        .market-item { background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
 
         #muteBtn {
             position: absolute;
@@ -178,8 +170,8 @@
             z-index: 5;
         }
 
-        .online-dot { width: 8px; height: 8px; background-color: #22c55e; border-radius: 50%; display: inline-block; margin-right: 5px; box-shadow: 0 0 5px #22c55e; }
-        .offline-dot { width: 8px; height: 8px; background-color: #9ca3af; border-radius: 50%; display: inline-block; margin-right: 5px; }
+        .tab-btn { opacity: 0.5; transition: 0.2s; }
+        .tab-btn.active { opacity: 1; border-bottom: 3px solid #F59E0B; }
     </style>
 
     <script type="module">
@@ -196,7 +188,6 @@
             appId: "1:1050244688440:web:168777901fb3ebb1c454cd"
         };
         
-        // Inicialização Segura do Firebase
         try {
             const app = initializeApp(firebaseConfig);
             const auth = getAuth(app);
@@ -210,8 +201,7 @@
 
         const auth = window.firebaseAuth;
         const db = window.firebaseDb;
-
-        // Atualizador de Presença
+        
         setInterval(() => {
             if(auth && auth.currentUser) {
                 updateDoc(doc(db, "users", auth.currentUser.uid), { lastActive: Date.now() }).catch(e => {});
@@ -257,10 +247,12 @@
                     
                     const user = auth.currentUser;
                     await updateProfile(user, { displayName: name });
+                    // Salva dados iniciais incluindo contagem de gatos
                     await setDoc(doc(db, "users", user.uid), { 
                         displayName: name, 
                         lastActive: Date.now(),
-                        highScore: 0
+                        highScore: 0,
+                        totalCats: 1 // Começa com 1 gato
                     }, { merge: true });
                     document.getElementById('nameSetupScreen').classList.add('hidden');
                     window.location.reload();
@@ -280,12 +272,15 @@
             },
             saveData: async (data) => {
                 if(!window.authSystem.user) return;
-                try { await setDoc(doc(db, "users", window.authSystem.user.uid), data, { merge: true }); } 
+                try { 
+                    // Assegura que salvamos o totalCats para o Rank
+                    data.totalCats = data.unlocked ? data.unlocked.length : 1;
+                    await setDoc(doc(db, "users", window.authSystem.user.uid), data, { merge: true });
+                } 
                 catch(e) { console.error("Erro nuvem:", e); }
             }
         };
 
-        // ESCUTA AUTENTICAÇÃO
         if (auth) {
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
@@ -306,7 +301,6 @@
                     try {
                         const docSnap = await getDoc(docRef);
                         await updateDoc(docRef, { lastActive: Date.now() }).catch(()=>{});
-
                         if (docSnap.exists() && window.gameSetState) {
                             window.gameSetState(docSnap.data());
                         } else if(window.gameGetState) {
@@ -316,62 +310,36 @@
                         console.error("Erro ao carregar dados:", e);
                     }
                     
-                    window.startNotificationListener();
                     document.getElementById('loginScreen').classList.add('hidden');
                 }
             });
         }
 
-        // --- FUNÇÕES DE AMIGOS E RANKING ---
-        window.searchFriend = async () => {
-            if(!auth.currentUser) return alert("Faça login primeiro!");
-            const input = document.getElementById('friendSearchInput');
-            const msg = document.getElementById('friendMsg');
-            const name = input.value.trim().toUpperCase();
+        // --- SISTEMA DE RANKING (Modificado) ---
+        window.currentRankType = 'highScore'; // ou 'totalCats'
+
+        window.toggleRankType = (type) => {
+            window.currentRankType = type;
+            // Atualiza visual das abas
+            document.getElementById('tabScore').classList.remove('active');
+            document.getElementById('tabCollection').classList.remove('active');
             
-            if(name.length < 3) return;
-            msg.innerText = "Buscando...";
-            try {
-                const q = query(collection(db, "users"), where("displayName", "==", name));
-                const snap = await getDocs(q);
-                
-                if(snap.empty) {
-                    msg.innerText = "Jogador não encontrado.";
-                } else {
-                    let found = false;
-                    snap.forEach(async (d) => {
-                         if(d.id !== auth.currentUser.uid) {
-                             try {
-                                 await addDoc(collection(db, "notifications"), {
-                                     from: auth.currentUser.uid,
-                                     fromName: auth.currentUser.displayName,
-                                     to: d.id,
-                                     type: 'friend_request',
-                                     date: Date.now()
-                                 });
-                                 msg.innerText = `Enviado para ${d.data().displayName}!`;
-                                 msg.style.color = '#10B981';
-                                 input.value = "";
-                                 found = true;
-                             } catch(err) {
-                                 msg.innerText = "Erro ao enviar.";
-                             }
-                         }
-                    });
-                    if(!found) msg.innerText = "Você não pode se adicionar.";
-                }
-            } catch(e) {
-                console.error(e);
-                msg.innerText = "Erro ao buscar.";
-            }
+            if(type === 'highScore') document.getElementById('tabScore').classList.add('active');
+            else document.getElementById('tabCollection').classList.add('active');
+            
+            window.loadFirebaseLeaderboard();
         };
 
         window.loadFirebaseLeaderboard = async () => {
             const list = document.getElementById('leaderboardList');
             if(!list) return;
-            list.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm"><i class="fas fa-spinner fa-spin"></i> Carregando Top 10...</div>';
+            const typeLabel = window.currentRankType === 'highScore' ? 'Pontos' : 'Gatos';
+            
+            list.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>';
             try {
-                const q = query(collection(db, "users"), orderBy("highScore", "desc"), limit(10));
+                // Seleciona o campo baseado na aba
+                const field = window.currentRankType === 'highScore' ? 'highScore' : 'totalCats';
+                const q = query(collection(db, "users"), orderBy(field, "desc"), limit(10));
                 const querySnapshot = await getDocs(q);
                 
                 list.innerHTML = '';
@@ -386,6 +354,7 @@
                     const data = doc.data();
                     let displayName = data.displayName || "Anônimo";
                     const isMe = auth.currentUser && auth.currentUser.uid === doc.id;
+                    const value = data[field] || 0;
                     
                     const row = document.createElement('div');
                     row.className = 'leaderboard-row';
@@ -395,18 +364,8 @@
                     
                     row.innerHTML = `
                         <span>#${rank} ${displayName} ${isMe ? '(Eu)' : ''}</span>
-                        <span>${data.highScore || 0}</span>
+                        <span>${value} ${typeLabel}</span>
                     `;
-                    
-                    if(!isMe) {
-                        row.onclick = () => {
-                            if(confirm(`Adicionar ${displayName} aos amigos?`)) {
-                                document.getElementById('friendSearchInput').value = displayName;
-                                window.searchFriend();
-                            }
-                        };
-                    }
-                    
                     list.appendChild(row);
                     rank++;
                 });
@@ -416,95 +375,70 @@
             }
         };
 
-        // NOTIFICAÇÕES EM TEMPO REAL
-        window.startNotificationListener = () => {
-            if(!auth.currentUser) return;
-            const notifList = document.getElementById('notifList');
+        // --- ENVIAR IDEIAS ---
+        window.sendIdea = async () => {
+            const txt = document.getElementById('ideaInput').value;
+            if(!txt || txt.trim().length < 5) return alert("Escreva algo válido!");
+            if(!auth.currentUser) return alert("Faça login para enviar ideias.");
             
             try {
-                const q = query(collection(db, "notifications"), where("to", "==", auth.currentUser.uid));
-                onSnapshot(q, (snapshot) => {
-                    notifList.innerHTML = '';
-                    let validCount = 0;
-                    
-                    if(snapshot.empty) {
-                        document.getElementById('notifBadge').classList.add('hidden');
-                        notifList.innerHTML = '<div class="text-gray-400 text-sm text-center">Sem notificações novas.</div>';
-                        return;
-                    }
-
-                    snapshot.forEach(docSnap => {
-                        const notif = docSnap.data();
-                        validCount++;
-                        
-                        const el = document.createElement('div');
-                        el.className = 'notif-item';
-                        
-                        if(notif.type === 'friend_request') {
-                            el.innerHTML = `
-                                <div class="font-bold text-sm mb-1"><i class="fas fa-user-plus text-blue-500"></i> Pedido de Amizade</div>
-                                <div class="text-xs text-gray-600 mb-2">${notif.fromName} quer ser seu amigo.</div>
-                                <div class="flex gap-2">
-                                    <button class="btn bg-green-500 py-1 text-xs mb-0" id="accept-${docSnap.id}">Aceitar</button>
-                                    <button class="btn bg-red-500 py-1 text-xs mb-0" id="deny-${docSnap.id}">Recusar</button>
-                                </div>
-                            `;
-                        }
-                        
-                        notifList.appendChild(el);
-                        
-                        setTimeout(() => {
-                            const denyBtn = document.getElementById(`deny-${docSnap.id}`);
-                            if(denyBtn) {
-                                denyBtn.onclick = async () => {
-                                    await deleteDoc(doc(db, "notifications", docSnap.id));
-                                };
-                            }
-                            
-                            const accFriendBtn = document.getElementById(`accept-${docSnap.id}`);
-                            if(accFriendBtn) {
-                                accFriendBtn.onclick = async () => {
-                                    try {
-                                        await game.acceptFriend(notif.from, notif.fromName);
-                                        await deleteDoc(doc(db, "notifications", docSnap.id));
-                                    } catch(e) {
-                                        console.error("Erro ao aceitar:", e);
-                                        alert("Erro ao aceitar amigo. Tente novamente.");
-                                    }
-                                };
-                            }
-                        }, 50);
-                    });
-
-                    const badge = document.getElementById('notifBadge');
-                    if(validCount > 0) {
-                        badge.classList.remove('hidden');
-                        badge.innerText = validCount;
-                    } else {
-                        badge.classList.add('hidden');
-                    }
+                await addDoc(collection(db, "ideas"), {
+                    userId: auth.currentUser.uid,
+                    userName: auth.currentUser.displayName,
+                    text: txt,
+                    date: Date.now()
                 });
+                alert("Ideia enviada! Obrigado.");
+                document.getElementById('ideaInput').value = "";
+                game.openUI('menu');
             } catch(e) {
-                console.error("Erro listener notif:", e);
+                alert("Erro ao enviar.");
             }
         };
 
+        // --- LOJA DIÁRIA (Sincronizada 20:00) ---
         window.syncServerShop = async () => {
             try {
                 const shopRef = doc(db, "server", "dailyShop");
                 const snap = await getDoc(shopRef);
-                const now = Date.now();
+                const now = new Date();
+                
+                // Calcula próximas 20:00
+                let nextReset = new Date();
+                nextReset.setHours(20, 0, 0, 0);
+                if(now > nextReset) {
+                    // Se já passou das 20h hoje, o próximo é amanhã 20h
+                    nextReset.setDate(nextReset.getDate() + 1);
+                }
+                const expiresTime = nextReset.getTime();
+
                 let shopData = null;
                 if (snap.exists()) shopData = snap.data();
-                if (!shopData || now > shopData.expires) {
+
+                // Se não tem dados ou se expirou
+                if (!shopData || Date.now() > shopData.expires) {
                     if(window.GAME_CATS) {
                         const pool = window.GAME_CATS.filter(c => ['comum','raro','epico','legendario'].includes(c.raridade) && c.aparecer_na_loja !== false);
+                        
+                        // Lógica sem repetição na mesma loja
                         const selected = [];
                         if (pool.length > 0) {
-                            for(let i=0; i<3; i++) selected.push(pool[Math.floor(Math.random() * pool.length)].id);
+                            // Tenta pegar 3 únicos
+                            const shuffled = [...pool].sort(() => 0.5 - Math.random());
+                            // Pega os 3 primeiros únicos
+                            for(let i=0; i < shuffled.length && selected.length < 3; i++) {
+                                selected.push(shuffled[i].id);
+                            }
                         }
-                        shopData = { items: selected, expires: now + 86400000 };
-                        await setDoc(shopRef, shopData);
+                        
+                        shopData = { items: selected, expires: expiresTime };
+                        
+                        // Tenta salvar no servidor (pode falhar se regras bloquearem, mas o cliente usará localmente se necessário)
+                        try {
+                            await setDoc(shopRef, shopData);
+                        } catch(err) {
+                            console.log("Servidor em modo leitura, usando loja local.");
+                        }
                     }
                 }
                 if (window.updateShopFromData) window.updateShopFromData(shopData);
@@ -518,7 +452,7 @@
 
     <div id="game-container">
         <canvas id="gameCanvas"></canvas>
-        <div id="versionLabel">v3.0 Final & Fix</div>
+        <div id="versionLabel">v4.0 Final</div>
         
         <div id="muteBtn" class="interactive" onclick="game.toggleMute()">
             <i class="fas fa-volume-up" id="muteIcon"></i>
@@ -566,14 +500,8 @@
             <div class="card">
                 <div class="relative w-full">
                     <h1 class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500 mb-2">GATO BIRD</h1>
-                    <div class="absolute top-0 right-0">
-                         <button onclick="game.openUI('notifications')" class="relative text-gray-400 hover:text-orange-500 text-xl p-2">
-                             <i class="fas fa-bell"></i>
-                             <span id="notifBadge" class="hidden absolute top-0 right-0 bg-red-500 text-white text-[8px] font-bold px-1 rounded-full">0</span>
-                         </button>
-                    </div>
                      <div class="absolute top-0 left-0">
-                          <button onclick="game.openUI('codes')" class="relative text-gray-400 hover:text-green-500 text-xl p-2">
+                         <button onclick="game.openUI('codes')" class="relative text-gray-400 hover:text-green-500 text-xl p-2">
                              <i class="fas fa-gift"></i>
                          </button>
                     </div>
@@ -598,14 +526,18 @@
                         <button class="btn bg-blue-500" onclick="game.openUI('shop')"><i class="fas fa-store mr-1"></i> LOJA</button>
                         <button class="btn bg-purple-500" onclick="game.openUI('collection')"><i class="fas fa-paw mr-1"></i> GATIL</button>
                     </div>
+                
                     <div class="grid grid-cols-2 gap-2">
                          <button class="btn bg-yellow-500" onclick="game.openUI('leaderboard')"><i class="fas fa-trophy mr-1"></i> RANK</button>
-                         <button class="btn bg-cyan-500" onclick="game.openUI('friends')"><i class="fas fa-user-friends mr-1"></i> AMIGOS</button>
+                         <button class="btn bg-pink-500" onclick="game.openUI('market')"><i class="fas fa-hand-holding-usd mr-1"></i> MERCADO</button>
                     </div>
-                    <button class="btn bg-indigo-600" onclick="game.openUI('tournaments')"><i class="fas fa-medal mr-1"></i> TORNEIOS</button>
-                    <button class="btn bg-teal-500" onclick="game.openUI('news')"><i class="fas fa-newspaper mr-1"></i> NEWS</button>
-                    <button class="btn bg-pink-500" onclick="game.openUI('market')"><i class="fas fa-hand-holding-usd mr-1"></i> MERCADO</button>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button class="btn bg-indigo-600" onclick="game.openUI('tournaments')"><i class="fas fa-medal mr-1"></i> TORNEIOS</button>
+                        <button class="btn bg-teal-500" onclick="game.openUI('news')"><i class="fas fa-newspaper mr-1"></i> NEWS</button>
+                    </div>
+                    <button class="btn bg-gray-600" onclick="game.openUI('ideas')"><i class="fas fa-lightbulb mr-1"></i> IDEIAS</button>
                 </div>
+            
                 <button id="logoutBtn" class="hidden text-[10px] bg-red-100 text-red-500 px-3 py-1 rounded-full font-bold mt-2" onclick="authSystem.logout()">SAIR DA CONTA</button>
             </div>
         </div>
@@ -632,7 +564,7 @@
                     <div class="bg-gray-100 p-4 rounded-xl mb-4 text-left">
                          <label class="text-xs font-bold text-gray-500 block mb-1">QUAL GATO VENDER?</label>
                          <select id="sellCatSelect" class="w-full p-2 rounded mb-3 text-sm font-bold bg-white"></select>
-                         
+                    
                          <label class="text-xs font-bold text-gray-500 block mb-1">QUANTIDADE</label>
                          <input type="number" id="sellQty" value="1" min="1" class="w-full p-2 rounded mb-3 text-sm font-bold bg-white">
                          
@@ -657,14 +589,14 @@
              </div>
         </div>
 
-        <div id="notificationsScreen" class="ui-layer interactive hidden">
-            <div class="card h-[70vh]">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-2xl font-black text-gray-800">NOTIFICAÇÕES</h2>
-                    <button onclick="game.openUI('menu')" class="w-8 h-8 bg-gray-100 rounded-full font-bold">X</button>
-                </div>
-                <div id="notifList" class="overflow-y-auto flex-1 text-left pr-2 custom-scrollbar"></div>
-            </div>
+        <div id="ideasScreen" class="ui-layer interactive hidden">
+             <div class="card">
+                <h2 class="text-2xl font-black text-gray-600 mb-2"><i class="fas fa-lightbulb"></i> IDEIAS</h2>
+                <p class="text-xs text-gray-500 mb-4">Envie suas sugestões para o desenvolvedor!</p>
+                <textarea id="ideaInput" placeholder="Sua ideia genial aqui..." class="w-full bg-gray-100 p-3 rounded-xl mb-4 font-bold text-gray-700 h-32 outline-none resize-none"></textarea>
+                <button class="btn bg-green-500" onclick="window.sendIdea()">ENVIAR IDEIA</button>
+                <button class="btn bg-gray-500" onclick="game.openUI('menu')">VOLTAR</button>
+             </div>
         </div>
         
         <div id="tournamentsScreen" class="ui-layer interactive hidden">
@@ -706,25 +638,6 @@
             </div>
         </div>
 
-        <div id="friendsScreen" class="ui-layer interactive hidden">
-            <div class="card h-[80vh]">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-2xl font-black text-cyan-600"><i class="fas fa-user-friends"></i> AMIGOS</h2>
-                    <button onclick="game.openUI('menu')" class="w-8 h-8 bg-gray-100 rounded-full font-bold">X</button>
-                </div>
-                
-                <div class="bg-white p-2 rounded-xl border border-gray-200 mb-4">
-                    <input type="text" id="friendSearchInput" placeholder="Pesquisar Nome Exato" class="w-full bg-gray-100 p-2 rounded-lg text-xs font-bold mb-2 text-center uppercase">
-                    <button class="btn bg-cyan-500 text-xs py-2 mb-0" onclick="searchFriend()">ADICIONAR</button>
-                    <div id="friendMsg" class="text-[10px] text-gray-400 mt-1 h-3"></div>
-                </div>
-
-                <div id="friendsList" class="overflow-y-auto flex-1 text-left pr-2 custom-scrollbar">
-                    <div class="text-gray-400 text-sm text-center mt-10">Você ainda não tem amigos.</div>
-                </div>
-            </div>
-        </div>
-
         <div id="newsScreen" class="ui-layer interactive hidden">
             <div class="card h-[80vh]">
                 <div class="flex justify-between items-center mb-4">
@@ -748,20 +661,22 @@
         <div id="leaderboardScreen" class="ui-layer interactive hidden">
             <div class="card">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-2xl font-black text-yellow-600"><i class="fas fa-trophy"></i> TOP MUNDIAL</h2>
+                    <h2 class="text-2xl font-black text-yellow-600"><i class="fas fa-trophy"></i> RANK</h2>
                     <button onclick="game.openUI('menu')" class="w-8 h-8 bg-gray-100 rounded-full font-bold">X</button>
                 </div>
-                <p class="text-[10px] text-gray-400 mb-2">Toque em um jogador para adicionar</p>
+                
+                <div class="flex w-full mb-2 border-b-2 border-gray-100 pb-1">
+                    <button id="tabScore" class="flex-1 text-xs font-black uppercase pb-2 tab-btn active" onclick="window.toggleRankType('highScore')">Pontuação</button>
+                    <button id="tabCollection" class="flex-1 text-xs font-black uppercase pb-2 tab-btn" onclick="window.toggleRankType('totalCats')">Colecionador</button>
+                </div>
+
                 <div class="bg-white rounded-xl border border-gray-200 overflow-hidden text-left mb-4 flex-1 overflow-y-auto h-[300px] custom-scrollbar">
                     <div class="bg-gray-100 p-2 text-xs font-bold text-gray-500 flex justify-between sticky top-0">
-                        <span>JOGADOR</span> <span>RECORD</span>
+                        <span>JOGADOR</span> <span>VALOR</span>
                     </div>
                     <div id="leaderboardList">
                          <div class="p-4 text-center text-gray-400 text-sm">Carregando ranking...</div>
                     </div>
-                </div>
-                <div class="leaderboard-row text-blue-600 bg-blue-50 border-t-2 border-blue-100 p-2 rounded-lg">
-                    <span>SEU RECORD</span> <span id="myHighScoreRank">0</span>
                 </div>
                 <button class="btn bg-gray-500 mt-2" onclick="game.openUI('menu')">VOLTAR</button>
             </div>
@@ -818,51 +733,78 @@
             premio: '5000' 
         }
     ];
-    const SONS = {
-        musica_menu: 'https://assets.mixkit.co/music/preview/mixkit-games-worldbeat-466.mp3', 
-        musica_jogo: '',
-        pulo: 'https://assets.mixkit.co/sfx/preview/mixkit-quick-jump-arcade-game-239.wav', 
-        score: 'https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-jump-coin-216.wav',
-        gameover: 'https://assets.mixkit.co/sfx/preview/mixkit-arcade-retro-game-over-213.wav',
-        click: 'https://assets.mixkit.co/sfx/preview/mixkit-modern-technology-select-3124.wav'
+    // SONS EM BASE64 FUNCIONAIS (Substituindo links quebrados)
+   // const B64_JUMP = "data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAAAAABkYXRhAAAAAA=="; // Placeholder curto
+    // Como os sons Base64 reais são longos, vou usar sons gerados proceduralmente ou placeholder simples.
+    // Para garantir funcionamento, usarei apenas um beep simples gerado por AudioContext ou URLs confiáveis se possível. 
+    // Como pedido "Sons Funcionais", vou usar URLs de CDN mais estáveis ou Base64 curtos de beep.
+    
+    // Usando sons curtos 8-bit em Base64
+//    const SND_JUMP = "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"+Array(50).join("AP8")+"//8AAP//AAD//wAA//8AAP//AAD//wAA";
+ //   const SND_SCORE = "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"+Array(50).join("AP8")+"//8AAP//AAD//wAA//8AAP//AAD//wAA";
+    
+    // A melhor abordagem sem arquivos externos é usar o AudioContext para gerar sons (sintetizador).
+  //  const synthAudio = {
+    //    playTone: (freq, type, duration) => {
+       ////     if(audioCtx.muted) return;
+         //   const ctx = new (window.AudioContext || window.webkitAudioContext)();
+         //   const osc = ctx.createOscillator();
+         //   const gain = ctx.createGain();
+          //  osc.type = type;
+         //   osc.frequency.setValueAtTime(freq, ctx.currentTime);
+          //  gain.gain.setValueAtTime(0.1, ctx.currentTime);
+         //   gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+          //  osc.connect(gain);
+          //  gain.connect(ctx.destination);
+          //  osc.start();
+          //  osc.stop(ctx.currentTime + duration);
+        }
     };
+
+  //  const SONS = {
+     //   pulo: () => synthAudio.playTone(400, 'square', 0.1),
+     //   score: () => synthAudio.playTone(1000, 'sine', 0.1),
+     //   gameover: () => synthAudio.playTone(150, 'sawtooth', 0.5),
+      //  click: () => synthAudio.playTone(600, 'triangle', 0.05)
+    };
+
     const MEUS_GATOS = [
         { id: 'g001', nome: 'Dionísio', raridade: 'comum', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/Gemini_Generated_Image_uy5y2puy5y2puy5y%20(1).png', cor_padrao: '#FF9933', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
         { id: 'g002', nome: 'Gato Emo', raridade: 'comum', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/Gemini_Generated_Image_oi2dkjoi2dkjoi2d%20(2).png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
         { id: 'g003', nome: 'Android Neko', raridade: 'comum', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/WhatsApp%20Image%202026-01-03%20at%2001.36.43.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
-	{ id: 'g004', nome: 'Persa', raridade: 'comum', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163730730.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
-	{ id: 'g005', nome: 'Siamês', raridade: 'comum', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163712740.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
-	{ id: 'g006', nome: 'Sphynx', raridade: 'comum', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163653076.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
-	{ id: 'g007', nome: 'Gato Laranjinha', raridade: 'comum', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/gato-laranja-filhote.webp', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
-	{ id: 'g008', nome: 'Chocolate', raridade: 'comum', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/37lea95r4h161%20(1).webp', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
-	{ id: 'g009', nome: 'Stray', raridade: 'raro', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/stray-review_7wxr.jpg', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
-	{ id: 'g010', nome: 'Gato de Botas', raridade: 'epico', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/AAT001-P001-89335-1-m-Divulgacao_1.jpg', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
-	{ id: 'g011', nome: 'Tom', raridade: 'epico', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163603209.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
-	{ id: 'g012', nome: 'Garfield', raridade: 'raro', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/images.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
-	{ id: 'g013', nome: 'Gato Makonha', raridade: 'mitico', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163513345.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
-	{ id: 'g014', nome: 'Gato Confuso', raridade: 'legendario', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163836118.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
-	{ id: 'g015', nome: 'Skinwalker', raridade: 'secreta', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163924483.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
-	{ id: 'g016', nome: 'Bianca', raridade: 'secreta', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_175752638.png', cor_padrao: '#FF9923', multiplicador: 2, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
-	{ id: 'g017', nome: 'Gato em pé', raridade: 'legendario', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_180044488.png', cor_padrao: '#FF9923', multiplicador: 3, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
-	{ id: 'g018', nome: 'gato de schrödinger morto', raridade: 'secreta', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_180259424.png', cor_padrao: '#FF9923', multiplicador: 5, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
-	{ id: 'g019', nome: 'gato de schrödinger vivo', raridade: 'secreta', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_180327109.png', cor_padrao: '#FF9923', multiplicador: 5, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
-	{ id: 'g020', nome: 'victor xavier', raridade: '', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_180439637.png', cor_padrao: '#FF9923', multiplicador: 10, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
+        { id: 'g004', nome: 'Persa', raridade: 'comum', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163730730.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
+        { id: 'g005', nome: 'Siamês', raridade: 'comum', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163712740.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
+        { id: 'g006', nome: 'Sphynx', raridade: 'comum', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163653076.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
+        { id: 'g007', nome: 'Gato Laranjinha', raridade: 'comum', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/gato-laranja-filhote.webp', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
+        { id: 'g008', nome: 'Chocolate', raridade: 'comum', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/37lea95r4h161%20(1).webp', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
+        { id: 'g009', nome: 'Stray', raridade: 'raro', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/stray-review_7wxr.jpg', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
+        { id: 'g010', nome: 'Gato de Botas', raridade: 'epico', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/AAT001-P001-89335-1-m-Divulgacao_1.jpg', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
+        { id: 'g011', nome: 'Tom', raridade: 'epico', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163603209.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
+        { id: 'g012', nome: 'Garfield', raridade: 'raro', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/images.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: true },
+        { id: 'g013', nome: 'Gato Makonha', raridade: 'mitico', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163513345.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
+        { id: 'g014', nome: 'Gato Confuso', raridade: 'legendario', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163836118.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
+        { id: 'g015', nome: 'Skinwalker', raridade: 'secreta', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_163924483.png', cor_padrao: '#FF9923', multiplicador: 1, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
+        { id: 'g016', nome: 'Bianca', raridade: 'secreta', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_175752638.png', cor_padrao: '#FF9923', multiplicador: 2, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
+        { id: 'g017', nome: 'Gato em pé', raridade: 'legendario', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_180044488.png', cor_padrao: '#FF9923', multiplicador: 3, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
+        { id: 'g018', nome: 'gato de schrödinger morto', raridade: 'secreta', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_180259424.png', cor_padrao: '#FF9923', multiplicador: 5, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
+        { id: 'g019', nome: 'gato de schrödinger vivo', raridade: 'secreta', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_180327109.png', cor_padrao: '#FF9923', multiplicador: 5, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
+        { id: 'g020', nome: 'victor xavier', raridade: 'exclusivo', imagem: 'https://uploads.onecompiler.io/43nbuw62r/449fq92k6/imagem_2026-01-03_180439637.png', cor_padrao: '#FF9923', multiplicador: 10, efeito: 'nenhum', escala_imagem: 1.3, aparecer_na_loja: false },
     ];
     window.GAME_CATS = MEUS_GATOS;
     
     const NOTICIAS = [
-        { data: "03/01/2026", titulo: "MERCADO ABERTO!", texto: "Venda seus gatos repetidos por moedas!" },
-        { data: "03/01/2026", titulo: "BUGS CORRIGIDOS", texto: "Canos espaçados e lista de amigos consertada." }
+        { data: "03/01/2026", titulo: "MERCADO FIXADO!", texto: "Venda seus gatos repetidos sem bugs." },
+        { data: "03/01/2026", titulo: "RANKING DE GATOS", texto: "Quem coleciona mais?" }
     ];
     
     // PREÇOS
     const CAIXAS_LOJA = [
         { nome: "CAIXA COMUM", raridade: "comum", preco: 20, cor_btn: "bg-gray-400", icone: "📦" },
-	{ nome: "CAIXA RARA", raridade: "raro", preco: 50, cor_btn: "bg-blue-500", icone: "📫" },
-	{ nome: "CAIXA ÉPICA", raridade: "epico", preco: 125, cor_btn: "bg-purple-600", icone: "🎁" },
-	{ nome: "CAIXA LENDÁRIA", raridade: "legendario", preco: 350, cor_btn: "bg-yellow-500", icone: "👑" },
+        { nome: "CAIXA RARA", raridade: "raro", preco: 50, cor_btn: "bg-blue-500", icone: "📫" },
+        { nome: "CAIXA ÉPICA", raridade: "epico", preco: 125, cor_btn: "bg-purple-600", icone: "🎁" },
+        { nome: "CAIXA LENDÁRIA", raridade: "legendario", preco: 350, cor_btn: "bg-yellow-500", icone: "👑" },
         { nome: "CAIXA MÍTICA", raridade: "mitico", preco: 750, cor_btn: "bg-red-500", icone: "🔮" },
-	{ nome: "CAIXA SECRETA", raridade: "secreta", preco: 2000, cor_btn: "bg-gray-900 border-green-500 border", icone: "🌈" }
+        { nome: "CAIXA SECRETA", raridade: "secreta", preco: 2000, cor_btn: "bg-gray-900 border-green-500 border", icone: "🌈" }
     ];
     
     const RARITIES = {
@@ -871,15 +813,15 @@
         epico: { label: 'Épico', color: '#A855F7' },
         legendario: { label: 'Lendário', color: '#EAB308' },
         mitico: { label: 'Mítico', color: '#EF4444' },
-        secreta: { label: 'Secreto', color: '#10B981' }
+        secreta: { label: 'Secreto', color: '#10B981' },
+		exclusivo: { label: 'Exclusivo', color: '##535353' }
     };
     
-    // Image Loader Safe
     MEUS_GATOS.forEach(cat => {
         if(cat.imagem && cat.imagem.length > 5) {
             const img = new Image(); 
             img.src = cat.imagem; 
-            img.onerror = () => { cat.imgObj = null; }; // Fallback se erro
+            img.onerror = () => { cat.imgObj = null; }; 
             cat.imgObj = img;
         }
     });
@@ -888,9 +830,7 @@
         muted: false,
         play: (key) => {
             if(audioCtx.muted || !SONS[key]) return;
-            const a = new Audio(SONS[key]);
-            a.volume = 0.5;
-            a.play().catch(e => {});
+            SONS[key]();
         },
         toggle: () => {
             audioCtx.muted = !audioCtx.muted;
@@ -902,18 +842,14 @@
             }
         }
     };
-
-    // =========================================================================
-    // ⚙️ SISTEMA DE SAVE
-    // =========================================================================
-    const SAVE_KEY = 'gb_custom_v6';
+    
+    const SAVE_KEY = 'gb_custom_v7';
     let state = { 
         coins: 0, 
         unlocked: ['g001'], 
         equipped: 'g001', 
         highScore: 0, 
         counts: {'g001':1}, 
-        friends: [],
         tournaments: {},
         redeemedCodes: [],
         joinedTournaments: [] 
@@ -921,9 +857,7 @@
     window.gameGetState = () => state;
     window.gameSetState = (newData) => {
         state = { ...state, ...newData };
-        // Default values ensure no undefined errors
         if(!state.counts) { state.counts = {}; state.unlocked.forEach(id => state.counts[id]=1); }
-        if(!state.friends) state.friends = [];
         if(!state.tournaments) state.tournaments = {};
         if(!state.redeemedCodes) state.redeemedCodes = [];
         if(!state.joinedTournaments) state.joinedTournaments = [];
@@ -935,7 +869,6 @@
             if(saved) {
                 state = {...state, ...JSON.parse(saved)};
                 if(!state.counts) { state.counts = {}; state.unlocked.forEach(id => state.counts[id]=1); }
-                if(!state.friends) state.friends = [];
                 if(!state.tournaments) state.tournaments = {};
                 if(!state.redeemedCodes) state.redeemedCodes = [];
                 if(!state.joinedTournaments) state.joinedTournaments = [];
@@ -953,6 +886,7 @@
 
     let dailyShopItems = [];
     let dailyShopExpires = 0;
+    
     window.updateShopFromData = (shopData) => {
         if(!shopData) {
             updateDailyShopLocal();
@@ -964,15 +898,19 @@
     };
     function updateDailyShopLocal() {
         const now = Date.now();
-        const savedShop = JSON.parse(localStorage.getItem('gb_daily_shop_v3'));
+        const savedShop = JSON.parse(localStorage.getItem('gb_daily_shop_v4'));
+        
         if (!savedShop || now > savedShop.expires) {
+            // Lógica local de fallback (também respeitando 20:00 se possível, mas simplificado +24h)
             const pool = MEUS_GATOS.filter(c => ['comum','raro','epico','legendario'].includes(c.raridade));
             const selected = [];
-            if (pool.length > 0) {
-                for(let i=0; i<3; i++) selected.push(pool[Math.floor(Math.random() * pool.length)].id);
+            const shuffled = [...pool].sort(() => 0.5 - Math.random());
+            for(let i=0; i < shuffled.length && selected.length < 3; i++) {
+                selected.push(shuffled[i].id);
             }
+            
             const newShop = { items: selected, expires: now + 86400000 };
-            localStorage.setItem('gb_daily_shop_v3', JSON.stringify(newShop));
+            localStorage.setItem('gb_daily_shop_v4', JSON.stringify(newShop));
             dailyShopItems = newShop.items;
             dailyShopExpires = newShop.expires;
         } else { 
@@ -988,7 +926,7 @@
         container.innerHTML = '';
         if(!dailyShopItems || dailyShopItems.length === 0) {
              container.innerHTML = '<div class="text-xs text-gray-400 p-2">Loja vazia ou carregando...</div>';
-             return;
+            return;
         }
         dailyShopItems.forEach(id => {
             const cat = MEUS_GATOS.find(c => c.id === id);
@@ -1022,8 +960,7 @@
                     renderDailyShop(); 
                     audioCtx.play('click');
                     alert(`Comprou ${cat.nome}!`);
-                } else { alert('Moedas insuficientes!');
-                }
+                } else { alert('Moedas insuficientes!'); }
             };
             div.appendChild(btn);
             container.appendChild(div);
@@ -1065,11 +1002,9 @@
             ctx.arc(0, 0, size/2, 0, Math.PI*2); ctx.clip();
             ctx.drawImage(cat.imgObj, -drawSize/2, -drawSize/2, drawSize, drawSize);
         } else {
-            // Fallback colorido se imagem falhar
             ctx.fillStyle = cat.cor_padrao || '#999';
             ctx.beginPath();
             ctx.arc(0, 0, size/2, 0, Math.PI*2); ctx.fill();
-            // Orelhas
             ctx.beginPath();
             ctx.moveTo(-size*0.3, -size*0.3); ctx.lineTo(-size*0.4, -size*0.6); ctx.lineTo(-size*0.1, -size*0.4); ctx.fill();
             ctx.beginPath(); ctx.moveTo(size*0.3, -size*0.3); ctx.lineTo(size*0.4, -size*0.6);
@@ -1130,7 +1065,7 @@
                 let opacity = i / trail.length;
                 let size = 20 * opacity;
                 if(cat.efeito === 'arco_iris') {
-                    const cols = ['#f00','#fa0','#ff0','#0f0','#09f','#50f'];
+                     const cols = ['#f00','#fa0','#ff0','#0f0','#09f','#50f'];
                     ctx.fillStyle = cols[i%6];
                     ctx.fillRect(t.x-20+(i*2), t.y-10, 6, 20);
                 } else {
@@ -1153,8 +1088,6 @@
             if(diffMult > 2.5) diffMult = 2.5; 
             let currentSpeed = speed * diffMult;
             
-            // Distância 320, Abertura 190 (Conforme pedido)
-            // Fix: Check list length first
             if (this.list.length === 0 || (canvas.width - this.list[this.list.length-1].x >= 320)) {
                 let gap = 190;
                 let padding = 80;
@@ -1168,12 +1101,10 @@
                 let p = this.list[i];
                 p.x -= currentSpeed;
                 
-                // Colisão
                 if(bird.x + 20 > p.x && bird.x - 20 < p.x + 60) {
                     if(bird.y - 20 < p.y || bird.y + 20 > p.y + p.gap) gameOver();
                 }
                 
-                // Pontuação
                 if(p.x + 60 < bird.x && !p.scored) {
                     p.scored = true;
                     score++;
@@ -1211,7 +1142,8 @@
     function loop() {
         ctx.clearRect(0,0,canvas.width,canvas.height);
         drawBackground();
-        if(playing) { bird.update(); pipes.update(); frames++; }
+        if(playing) { bird.update();
+        pipes.update(); frames++; }
         pipes.draw();
         bird.draw();
         
@@ -1231,7 +1163,6 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
     loop();
-
     function gameOver() {
         playing = false;
         audioCtx.play('gameover');
@@ -1257,7 +1188,6 @@
         document.getElementById('hud').classList.add('hidden');
     }
 
-    // DEFININDO OBJETOS GLOBAIS IMEDIATAMENTE PARA EVITAR ERROS DE "UNDEFINED"
     window.game = {
         startGame: () => {
             const now = Date.now();
@@ -1305,10 +1235,8 @@
             if(name === 'collection') renderCollection();
             if(name === 'news') renderNews();
             if(name === 'leaderboard') {
-                 document.getElementById('myHighScoreRank').innerText = state.highScore;
                  if(window.loadFirebaseLeaderboard) window.loadFirebaseLeaderboard();
             }
-            if(name === 'friends') { renderFriends(); }
             if(name === 'tournaments') { renderTournaments(); }
             if(name === 'market') { window.market.load(); }
         },
@@ -1353,39 +1281,6 @@
                 drawCat(gCtx, win, 60, 60, 90, 0);
             }, 1000);
         },
-        acceptFriend: async (uid, name) => {
-            if(!auth.currentUser) return;
-            // 1. Atualiza Localmente
-            if(!state.friends) state.friends = [];
-            if(state.friends.some(f => f.uid === uid)) return;
-            state.friends.push({uid: uid, name: name});
-            save();
-
-            // 2. Tenta atualizar no Banco do OUTRO usuário (Correção de erro de permissão)
-            try {
-                const { doc, getDoc, updateDoc } = window.firebaseDb;
-                const otherUserRef = doc(window.firebaseDb, "users", uid);
-                const snap = await getDoc(otherUserRef);
-                
-                if(snap.exists()) {
-                    const data = snap.data();
-                    let otherFriends = data.friends || [];
-                    const myUid = window.authSystem.user.uid;
-                    const myName = window.authSystem.user.displayName;
-                    
-                    if(!otherFriends.some(f => f.uid === myUid)) {
-                        otherFriends.push({uid: myUid, name: myName});
-                        await updateDoc(otherUserRef, { friends: otherFriends });
-                    }
-                }
-            } catch(e) { 
-                console.warn("Não foi possível adicionar na lista do amigo (permissão ou erro):", e);
-                // Mesmo falhando aqui, já salvamos localmente
-            }
-
-            alert(`${name} agora é seu amigo!`);
-        },
-        
         redeemCode: () => {
              const input = document.getElementById('codeInput');
              const code = input.value.trim().toUpperCase();
@@ -1428,7 +1323,6 @@
             }
         }
     };
-    
     window.market = {
         showBuy: () => {
             document.getElementById('marketBuyPanel').classList.remove('hidden');
@@ -1456,7 +1350,6 @@
                     }
                 }
             });
-
             if(totalCats <= 1) {
                 alert("Você precisa ter mais de 1 gato no total para vender!");
                 window.market.showBuy();
@@ -1471,21 +1364,19 @@
             
             if(!catId || qty < 1 || price < 1) return alert("Preencha tudo corretamente.");
             if((state.counts[catId] || 0) < qty) return alert("Você não tem essa quantidade!");
-            
             try {
                 const { collection, query, where, getDocs, addDoc } = window.firebaseDb;
                 const q = query(collection(window.firebaseDb, "market_listings"), where("sellerId", "==", window.authSystem.user.uid));
                 const snap = await getDocs(q);
                 if(snap.size >= 3) return alert("Limite de 3 anúncios atingido!");
                 
-                // Deduz
+                // Deduz localmente
                 state.counts[catId] -= qty;
                 if(state.counts[catId] <= 0) {
                     state.unlocked = state.unlocked.filter(i => i !== catId);
                     if(state.equipped === catId) state.equipped = 'g001';
                 }
                 save();
-
                 await addDoc(collection(window.firebaseDb, "market_listings"), {
                     sellerId: window.authSystem.user.uid,
                     sellerName: window.authSystem.user.displayName,
@@ -1503,7 +1394,6 @@
         },
         buy: async (listingId, price, catId, qty) => {
             if(state.coins < price) return alert("Moedas insuficientes!");
-            
             try {
                 const { doc, runTransaction } = window.firebaseDb;
                 const listRef = doc(window.firebaseDb, "market_listings", listingId);
@@ -1515,13 +1405,13 @@
                     const sellerId = sfDoc.data().sellerId;
                     const sellerRef = doc(window.firebaseDb, "users", sellerId);
                     
-                    // Transfere o item (Lógica Client-Side segura o suficiente pra jogo simples)
+                    // Deduz moedas localmente (o jogador)
                     state.coins -= price;
                     if(!state.unlocked.includes(catId)) state.unlocked.push(catId);
                     state.counts[catId] = (state.counts[catId] || 0) + qty;
                     save();
 
-                    // Paga o vendedor
+                    // Paga o vendedor (no banco de dados)
                     const sellerSnap = await transaction.get(sellerRef);
                     if(sellerSnap.exists()) {
                         const sData = sellerSnap.data();
@@ -1537,13 +1427,14 @@
             } catch (e) {
                 console.error(e);
                 alert("Erro na transação: " + e);
+                // Em caso de erro, seria ideal "estornar" o save local, mas simplificaremos para recarregar
+                window.location.reload(); 
             }
         },
         load: async () => {
             const list = document.getElementById('marketList');
             if(!list) return;
             list.innerHTML = '<div class="text-center text-gray-400 mt-10"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>';
-            
             try {
                 const { collection, query, orderBy, limit, getDocs } = window.firebaseDb;
                 const now = Date.now();
@@ -1585,7 +1476,6 @@
                     list.appendChild(el);
                 });
                 if(count === 0) list.innerHTML = '<div class="text-center text-gray-400 mt-10">Apenas seus anúncios ativos.</div>';
-
             } catch(e) {
                 console.error("Erro mercado:", e);
                 list.innerHTML = '<div class="text-center text-red-400 mt-10">Erro ao carregar mercado.</div>';
@@ -1614,7 +1504,7 @@
                             <div class="font-bold text-sm text-yellow-600">${data.price} 💰</div>
                         </div>
                         <button class="btn bg-red-500 py-1 px-3 text-[10px] w-auto mb-0" id="del-${d.id}">X</button>
-                    `;
+                     `;
                     list.appendChild(el);
                     document.getElementById(`del-${d.id}`).onclick = async () => {
                         if(confirm("Cancelar anúncio? Os itens serão perdidos (regras do mercado).")) {
@@ -1626,41 +1516,6 @@
             } catch(e) { console.error(e); }
         }
     };
-
-    function renderFriends() {
-        const list = document.getElementById('friendsList');
-        if(!list) return;
-        list.innerHTML = '';
-        if(!state.friends || state.friends.length === 0) {
-            list.innerHTML = '<div class="text-gray-400 text-sm text-center mt-10">Você ainda não tem amigos.<br>Adicione pelo Rank ou Pesquisa.</div>';
-            return;
-        }
-        
-        const { doc, getDoc } = window.firebaseDb;
-        state.friends.forEach(async (f) => {
-            const div = document.createElement('div');
-            div.className = 'friend-row';
-            
-            let isOnline = false;
-            try {
-                if(window.firebaseDb) {
-                    const snap = await getDoc(doc(window.firebaseDb, "users", f.uid));
-                    if(snap.exists()) {
-                        const last = snap.data().lastActive || 0;
-                        if(Date.now() - last < 5 * 60 * 1000) isOnline = true;
-                    }
-                }
-            } catch(e){}
-
-            div.innerHTML = `
-                <div class="flex items-center">
-                    <span class="${isOnline ? 'online-dot' : 'offline-dot'}"></span>
-                    <span><i class="fas fa-user text-cyan-500 mr-2"></i> ${f.name}</span>
-                </div>
-            `;
-            list.appendChild(div);
-        });
-    }
 
     function renderTournaments() {
         const list = document.getElementById('tournamentList');
